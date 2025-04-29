@@ -32,9 +32,9 @@ const SystemResults: React.FC<SystemResultsProps> = ({ results, onBack }) => {
       
       <div className="bg-white rounded-lg shadow-md overflow-hidden">
         <div className="bg-gradient-to-r from-green-600 to-green-700 p-6 text-white">
-          <h2 className="text-2xl font-bold mb-2">Your Solar System Recommendation</h2>
+          <h2 className="text-2xl font-bold mb-2">Your Solar-Powered System Recommendation</h2>
           <p className="opacity-90">
-            Here's your complete solar system design based on your requirements.
+            Here's your complete solar-powered system design based on your requirements.
           </p>
         </div>
         

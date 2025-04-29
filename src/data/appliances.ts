@@ -60,14 +60,14 @@ export const appliances: Appliance[] = [
   {
     id: '9',
     name: 'Mobile Phone Charger',
-    wattage: 10,
+    wattage: 25,
     defaultQuantity: 2,
     defaultHours: 3,
   },
   {
     id: '10',
     name: 'Microwave Oven',
-    wattage: 900,
+    wattage: 1000,
     defaultQuantity: 0,
     defaultHours: 1,
   },

@@ -69,7 +69,7 @@ function App() {
 
   // Update document title
   useEffect(() => {
-    document.title = 'SolarMate Pro - Solar System Calculator';
+    document.title = 'SolarMate Pro - Solar-Powered System Calculator';
   }, []);
 
   return (
@@ -81,7 +81,7 @@ function App() {
           <div className="max-w-5xl mx-auto">
             <div className="mb-8">
               <h2 className="text-2xl md:text-3xl font-bold text-gray-800 mb-2">
-                Solar System Calculator
+                Solar-Powered System Calculator
               </h2>
               <p className="text-gray-600 max-w-3xl">
                 Design your custom solar power system by selecting your appliances, 
