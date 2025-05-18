@@ -32,11 +32,25 @@ function App() {
 
   // Handle appliance selection change
   const handleApplianceChange = (updatedAppliance: SelectedAppliance) => {
-    setSelectedAppliances(prev =>
-      prev.map(appliance =>
-        appliance.id === updatedAppliance.id ? updatedAppliance : appliance
-      )
-    );
+    setSelectedAppliances(prev => {
+      // Check if this is a custom appliance
+      if (updatedAppliance.id.startsWith('custom-')) {
+        // If it exists, update it; otherwise add it
+        const exists = prev.some(a => a.id === updatedAppliance.id);
+        if (exists) {
+          return prev.map(appliance =>
+            appliance.id === updatedAppliance.id ? updatedAppliance : appliance
+          );
+        } else {
+          return [...prev, updatedAppliance];
+        }
+      } else {
+        // Handle regular appliances
+        return prev.map(appliance =>
+          appliance.id === updatedAppliance.id ? updatedAppliance : appliance
+        );
+      }
+    });
   };
 
   // Handle backup hours change

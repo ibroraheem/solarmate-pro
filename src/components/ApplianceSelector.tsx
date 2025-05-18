@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Appliance, SelectedAppliance } from '../types';
-import { MinusCircleIcon, PlusCircleIcon } from 'lucide-react';
+import { MinusCircleIcon, PlusCircleIcon, PlusIcon } from 'lucide-react';
 
 interface ApplianceSelectorProps {
   appliances: Appliance[];
@@ -13,6 +13,14 @@ const ApplianceSelector: React.FC<ApplianceSelectorProps> = ({
   selectedAppliances,
   onApplianceChange,
 }) => {
+  const [showCustomForm, setShowCustomForm] = useState(false);
+  const [customAppliance, setCustomAppliance] = useState({
+    name: '',
+    wattage: '',
+    quantity: '1',
+    hoursPerDay: '4'
+  });
+
   // Check if an appliance is selected
   const isSelected = (applianceId: string): boolean => {
     return selectedAppliances.some(
@@ -59,6 +67,30 @@ const ApplianceSelector: React.FC<ApplianceSelectorProps> = ({
         hoursPerDay: validHours,
       });
     }
+  };
+
+  // Handle custom appliance submission
+  const handleCustomApplianceSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    const newAppliance: SelectedAppliance = {
+      id: `custom-${Date.now()}`,
+      name: customAppliance.name,
+      wattage: parseInt(customAppliance.wattage),
+      defaultQuantity: 1,
+      defaultHours: 4,
+      quantity: parseInt(customAppliance.quantity),
+      hoursPerDay: parseInt(customAppliance.hoursPerDay)
+    };
+
+    onApplianceChange(newAppliance);
+    setCustomAppliance({
+      name: '',
+      wattage: '',
+      quantity: '1',
+      hoursPerDay: '4'
+    });
+    setShowCustomForm(false);
   };
 
   return (
@@ -150,6 +182,101 @@ const ApplianceSelector: React.FC<ApplianceSelectorProps> = ({
             })}
           </tbody>
         </table>
+      </div>
+
+      {/* Custom Appliance Form */}
+      <div className="mt-6 border-t pt-6">
+        {!showCustomForm ? (
+          <button
+            onClick={() => setShowCustomForm(true)}
+            className="flex items-center text-green-600 hover:text-green-700 transition-colors"
+          >
+            <PlusIcon className="h-5 w-5 mr-2" />
+            Add Custom Appliance
+          </button>
+        ) : (
+          <form onSubmit={handleCustomApplianceSubmit} className="space-y-4">
+            <h3 className="text-lg font-medium text-gray-800">Add Custom Appliance</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="custom-name" className="block text-sm font-medium text-gray-700">
+                  Appliance Name
+                </label>
+                <input
+                  type="text"
+                  id="custom-name"
+                  value={customAppliance.name}
+                  onChange={(e) => setCustomAppliance(prev => ({ ...prev, name: e.target.value }))}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="custom-wattage" className="block text-sm font-medium text-gray-700">
+                  Wattage (W)
+                </label>
+                <input
+                  type="number"
+                  id="custom-wattage"
+                  value={customAppliance.wattage}
+                  onChange={(e) => setCustomAppliance(prev => ({ ...prev, wattage: e.target.value }))}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500"
+                  min="1"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="custom-quantity" className="block text-sm font-medium text-gray-700">
+                  Quantity
+                </label>
+                <input
+                  type="number"
+                  id="custom-quantity"
+                  value={customAppliance.quantity}
+                  onChange={(e) => setCustomAppliance(prev => ({ ...prev, quantity: e.target.value }))}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500"
+                  min="1"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="custom-hours" className="block text-sm font-medium text-gray-700">
+                  Hours per Day
+                </label>
+                <input
+                  type="number"
+                  id="custom-hours"
+                  value={customAppliance.hoursPerDay}
+                  onChange={(e) => setCustomAppliance(prev => ({ ...prev, hoursPerDay: e.target.value }))}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500"
+                  min="1"
+                  max="24"
+                  required
+                />
+              </div>
+            </div>
+            
+            <div className="flex justify-end space-x-3">
+              <button
+                type="button"
+                onClick={() => setShowCustomForm(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+              >
+                Add Appliance
+              </button>
+            </div>
+          </form>
+        )}
       </div>
 
       {selectedAppliances.filter(a => a.quantity > 0).length === 0 && (

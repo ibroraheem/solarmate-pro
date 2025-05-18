@@ -23,14 +23,14 @@ const BackupSettings: React.FC<BackupSettingsProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <label htmlFor="backup-hours" className="block mb-2 text-sm font-medium text-gray-700">
-            Backup Hours Required (4-12)
+            Backup Hours Required (4-24)
           </label>
           <div className="flex items-center">
             <input
               id="backup-hours"
               type="range"
               min="4"
-              max="12"
+              max="24"
               step="1"
               value={backupHours}
               onChange={(e) => onBackupHoursChange(parseInt(e.target.value))}
@@ -42,8 +42,8 @@ const BackupSettings: React.FC<BackupSettingsProps> = ({
           </div>
           <div className="flex justify-between text-xs text-gray-500 mt-1">
             <span>4 hrs</span>
-            <span>8 hrs</span>
             <span>12 hrs</span>
+            <span>24 hrs</span>
           </div>
           <p className="mt-2 text-sm text-gray-600">
             How many hours of power backup do you need during power outages?
