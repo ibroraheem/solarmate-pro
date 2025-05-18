@@ -7,7 +7,7 @@ const Header: React.FC = () => {
       <div className="container mx-auto flex items-center justify-between">
         <div className="flex items-center gap-2">
           <SunIcon className="h-8 w-8 text-yellow-300" />
-          <h1 className="text-2xl md:text-3xl font-bold">SolarMate Pro</h1>
+          <h1 className="text-2xl md:text-3xl font-bold">SolarMate</h1>
         </div>
         <div className="hidden md:block">
           <p className="text-sm md:text-base italic">
