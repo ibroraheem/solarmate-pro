@@ -98,19 +98,21 @@ const ApplianceSelector: React.FC<ApplianceSelectorProps> = ({
       <h2 className="text-xl font-semibold mb-4 text-gray-800">
         Select Your Appliances
       </h2>
-      <div className="overflow-x-auto">
-        <div className="min-w-[800px]">
-          <table className="w-full border-collapse">
-            <thead className="bg-gray-50 sticky top-0 z-10">
+
+      {/* Desktop Table View */}
+      <div className="hidden md:block">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
               <tr>
-                <th className="py-3 px-4 text-left text-sm font-medium text-gray-600">Appliance</th>
-                <th className="py-3 px-4 text-left text-sm font-medium text-gray-600">Wattage</th>
-                <th className="py-3 px-4 text-left text-sm font-medium text-gray-600">Quantity</th>
-                <th className="py-3 px-4 text-left text-sm font-medium text-gray-600">Hours/Day</th>
-                <th className="py-3 px-4 text-right text-sm font-medium text-gray-600">Daily Energy</th>
+                <th scope="col" className="py-3 px-4 text-left text-sm font-medium text-gray-600">Appliance</th>
+                <th scope="col" className="py-3 px-4 text-left text-sm font-medium text-gray-600">Wattage</th>
+                <th scope="col" className="py-3 px-4 text-left text-sm font-medium text-gray-600">Quantity</th>
+                <th scope="col" className="py-3 px-4 text-left text-sm font-medium text-gray-600">Hours/Day</th>
+                <th scope="col" className="py-3 px-4 text-right text-sm font-medium text-gray-600">Daily Energy</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
+            <tbody className="divide-y divide-gray-200 bg-white">
               {appliances.map((appliance) => {
                 const selected = getSelectedAppliance(appliance.id);
                 const quantity = selected ? selected.quantity : 0;
@@ -198,6 +200,96 @@ const ApplianceSelector: React.FC<ApplianceSelectorProps> = ({
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Mobile Card View */}
+      <div className="md:hidden space-y-4">
+        {appliances.map((appliance) => {
+          const selected = getSelectedAppliance(appliance.id);
+          const quantity = selected ? selected.quantity : 0;
+          const hours = selected ? selected.hoursPerDay : appliance.defaultHours;
+          const isActive = quantity > 0;
+          const dailyEnergy = appliance.wattage * quantity * hours;
+
+          return (
+            <div
+              key={appliance.id}
+              className={`p-4 rounded-lg border ${
+                isActive ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'
+              }`}
+            >
+              <div className="flex justify-between items-start mb-3">
+                <div>
+                  <h3 className={`font-medium ${isActive ? 'text-gray-900' : 'text-gray-600'}`}>
+                    {appliance.name}
+                  </h3>
+                  <p className="text-sm text-gray-500">{appliance.wattage}W</p>
+                </div>
+                {isActive && (
+                  <span className="text-sm font-medium text-green-600">
+                    {dailyEnergy.toLocaleString()} Wh/day
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Quantity
+                  </label>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => handleQuantityChange(appliance, quantity - 1)}
+                      className="text-gray-500 hover:text-red-500 focus:outline-none transition-colors"
+                      disabled={quantity === 0}
+                    >
+                      <MinusCircleIcon className="h-5 w-5" />
+                    </button>
+                    <span className="w-6 text-center font-medium">{quantity}</span>
+                    <button
+                      onClick={() => handleQuantityChange(appliance, quantity + 1)}
+                      className="text-gray-500 hover:text-green-500 focus:outline-none transition-colors"
+                    >
+                      <PlusCircleIcon className="h-5 w-5" />
+                    </button>
+                  </div>
+                </div>
+
+                {isActive && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Hours/Day
+                    </label>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => handleHoursChange(appliance.id, Math.max(1, hours - 1))}
+                        className="text-gray-500 hover:text-red-500 focus:outline-none transition-colors"
+                      >
+                        <MinusCircleIcon className="h-5 w-5" />
+                      </button>
+                      <input
+                        type="number"
+                        min="1"
+                        max="24"
+                        value={hours}
+                        onChange={(e) =>
+                          handleHoursChange(appliance.id, parseInt(e.target.value) || 1)
+                        }
+                        className="w-20 p-1 border rounded text-center focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                      />
+                      <button
+                        onClick={() => handleHoursChange(appliance.id, Math.min(24, hours + 1))}
+                        className="text-gray-500 hover:text-green-500 focus:outline-none transition-colors"
+                      >
+                        <PlusCircleIcon className="h-5 w-5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {/* Custom Appliance Form */}

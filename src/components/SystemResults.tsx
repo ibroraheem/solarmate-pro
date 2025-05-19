@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { ArrowLeftIcon, BatteryFullIcon, ZapIcon, SunIcon, Share2Icon, DownloadIcon } from 'lucide-react';
+import { ArrowLeftIcon, BatteryFullIcon, ZapIcon, SunIcon, Share2Icon } from 'lucide-react';
 import { SystemResults as SystemResultsType } from '../types';
 import { formatCurrency } from '../utils/calculations';
-import { generatePDF } from '../utils/pdfGenerator';
+import PremiumDownloadButton from './PremiumDownloadButton';
 
 interface SystemResultsProps {
   results: SystemResultsType;
@@ -14,10 +14,6 @@ const SystemResults: React.FC<SystemResultsProps> = ({ results, onBack }) => {
   
   const handleBatteryTypeChange = (type: 'Tubular' | 'Lithium') => {
     setSelectedBatteryType(type);
-  };
-
-  const handleDownloadPDF = () => {
-    generatePDF(results, selectedBatteryType);
   };
 
   return (
@@ -187,13 +183,12 @@ const SystemResults: React.FC<SystemResultsProps> = ({ results, onBack }) => {
           
           {/* Action Buttons */}
           <div className="mt-6 flex flex-col sm:flex-row justify-center gap-4">
-            <button
-              onClick={handleDownloadPDF}
-              className="flex items-center justify-center px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
-            >
-              <DownloadIcon className="h-5 w-5 mr-2" />
-              Download Report
-            </button>
+            <div className="w-full">
+              <PremiumDownloadButton 
+                results={results}
+                selectedBatteryType={selectedBatteryType} 
+              />
+            </div>
             
             <a
               href="https://wa.me/2349066730744?text=Hello,%20I%20just%20sized%20a%20solar%20system%20on%20SolarMate%20Pro.%20I'd%20like%20to%20discuss%20further."

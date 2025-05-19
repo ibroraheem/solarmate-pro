@@ -7,6 +7,7 @@ import {
   SAFETY_MARGIN, 
   DEFAULT_PSH 
 } from '../data/system';
+import { calculateSystemComponents } from './systemCalculations';
 
 export const calculateResults = (
   selectedAppliances: SelectedAppliance[],
@@ -170,6 +171,13 @@ export const calculateResults = (
     totalPrice: totalTubularPrice
   };
 
+  // Calculate system components
+  const components = calculateSystemComponents(
+    adjustedPeakLoad,
+    inverterSize * 1000, // Convert kVA to watts
+    systemVoltage
+  );
+
   return {
     peakLoad,
     adjustedPeakLoad,
@@ -189,7 +197,8 @@ export const calculateResults = (
     totalPrice: {
       withTubular: totalPriceWithTubular,
       withLithium: totalPriceWithLithium
-    }
+    },
+    components
   };
 };
 

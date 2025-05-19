@@ -27,6 +27,28 @@ export interface BatteryOption {
   totalPrice: number;
 }
 
+export interface SystemComponents {
+  acBreaker: {
+    current: number;
+    size: number;
+    cableSize: number;
+  };
+  dcBreaker: {
+    current: number;
+    size: number;
+    cableSize: number;
+  };
+  avr: {
+    kva: number;
+    size: number;
+  };
+  changeoverSwitch: {
+    current: number;
+    size: number;
+    type: 'Manual' | 'Automatic';
+  };
+}
+
 export interface SystemResults {
   peakLoad: number;
   adjustedPeakLoad: number;
@@ -47,6 +69,7 @@ export interface SystemResults {
     withTubular: number;
     withLithium: number;
   };
+  components: SystemComponents;
 }
 
 export type Step = 'appliances' | 'summary' | 'results';
