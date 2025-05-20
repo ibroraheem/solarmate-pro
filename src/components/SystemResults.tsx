@@ -7,9 +7,16 @@ import PremiumDownloadButton from './PremiumDownloadButton';
 interface SystemResultsProps {
   results: SystemResultsType;
   onBack: () => void;
+  backupHours: number;
+  selectedState?: { name: string; psh: number };
 }
 
-const SystemResults: React.FC<SystemResultsProps> = ({ results, onBack }) => {
+const SystemResults: React.FC<SystemResultsProps> = ({ 
+  results, 
+  onBack,
+  backupHours,
+  selectedState
+}) => {
   const [selectedBatteryType, setSelectedBatteryType] = useState<'Tubular' | 'Lithium'>('Lithium');
   
   const handleBatteryTypeChange = (type: 'Tubular' | 'Lithium') => {
@@ -168,17 +175,31 @@ const SystemResults: React.FC<SystemResultsProps> = ({ results, onBack }) => {
           
           {/* Total Price Section */}
           <div className="mt-6 bg-green-50 p-4 rounded-lg border border-green-200">
-            <h3 className="text-lg font-semibold text-gray-800 mb-3">Total System Price</h3>
+            <h3 className="text-lg font-semibold text-gray-800 mb-3">Estimated System Price Range</h3>
             
             <div className="text-2xl font-bold text-green-700 mb-2">
               {selectedBatteryType === 'Tubular'
-                ? formatCurrency(results.totalPrice.withTubular)
-                : formatCurrency(results.totalPrice.withLithium)}
+                ? `${formatCurrency(results.totalPrice.withTubular.range.lowerBound)} - ${formatCurrency(results.totalPrice.withTubular.range.upperBound)}`
+                : `${formatCurrency(results.totalPrice.withLithium.range.lowerBound)} - ${formatCurrency(results.totalPrice.withLithium.range.upperBound)}`}
             </div>
             
-            <p className="text-sm text-gray-600 italic">
-              *Installation materials and labour fees will be quoted after inspection.
-            </p>
+            <div className="mt-4 space-y-2">
+              <p className="text-sm text-gray-600 font-medium">Price Disclaimer:</p>
+              <ul className="text-sm text-gray-600 list-disc list-inside space-y-1">
+                {results.priceDisclaimer.factors.map((factor, index) => (
+                  <li key={index}>{factor}</li>
+                ))}
+              </ul>
+              <p className="text-sm text-gray-600 italic mt-2">
+                *Prices shown are supplier prices for core components only. Additional costs include:
+              </p>
+              <ul className="text-sm text-gray-600 list-disc list-inside space-y-1">
+                <li>Installation and labor charges</li>
+                <li>Additional components (cables, breakers, etc.)</li>
+                <li>Transportation and logistics</li>
+                <li>Local permits and regulations</li>
+              </ul>
+            </div>
           </div>
           
           {/* Action Buttons */}
@@ -186,7 +207,9 @@ const SystemResults: React.FC<SystemResultsProps> = ({ results, onBack }) => {
             <div className="w-full">
               <PremiumDownloadButton 
                 results={results}
-                selectedBatteryType={selectedBatteryType} 
+                selectedBatteryType={selectedBatteryType}
+                backupHours={backupHours}
+                selectedState={selectedState}
               />
             </div>
             

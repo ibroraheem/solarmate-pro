@@ -1,112 +1,140 @@
 import { jsPDF } from 'jspdf';
 import { SystemResults } from '../types';
-import { formatCurrency } from './calculations';
 
-export const generatePDF = (results: SystemResults, selectedBatteryType: 'Tubular' | 'Lithium') => {
+export const generatePDF = (
+  results: SystemResults,
+  selectedBatteryType: 'Tubular' | 'Lithium',
+  backupHours: number,
+  selectedState?: { name: string }
+) => {
   const doc = new jsPDF();
   const margin = 20;
-  let yPos = margin;
+  const pageWidth = 210;
+  const pageHeight = 297;
   const lineHeight = 10;
-  const pageHeight = 297; // A4 height in mm
-  const pageWidth = 210; // A4 width in mm
+  let yPos = margin;
 
-  // Colors
+  // Modern color palette
   const colors = {
-    primary: '#16a34a', // green-600
-    secondary: '#15803d', // green-700
-    accent: '#fbbf24', // yellow-400
-    text: '#1f2937', // gray-800
-    lightText: '#6b7280', // gray-500
-    background: '#f8fafc', // slate-50
-    border: '#e2e8f0', // slate-200
+    primary: '#16a34a', // green
+    accent: '#fbbf24', // yellow
+    background: '#f8fafc', // light
+    text: '#1f2937', // dark
+    lightText: '#6b7280',
+    border: '#e2e8f0',
+    section: '#e0f2fe', // light blue
+    box: '#f1f5f9', // very light
+    header: '#15803d', // deep green
+    footer: '#fbbf24', // yellow
   };
 
-  // Helper function to add text and move position
-  const addText = (text: string, fontSize = 12, isBold = false, color = colors.text, align: 'left' | 'center' | 'right' = 'left') => {
+  // Helper: Add wrapped text
+  const addWrappedText = (text: string, x: number, y: number, maxWidth: number, fontSize = 12, color = colors.text, isBold = false) => {
     doc.setFontSize(fontSize);
     doc.setFont('helvetica', isBold ? 'bold' : 'normal');
     doc.setTextColor(color);
-    doc.text(text, margin, yPos, { align });
-    yPos += lineHeight;
+    const lines = doc.splitTextToSize(text, maxWidth);
+    lines.forEach((line: string) => {
+      doc.text(line, x, y);
+      y += lineHeight;
+    });
+    return y;
   };
 
-  // Helper function to add section
-  const addSection = (title: string) => {
-    // Check if we need a new page
-    if (yPos > pageHeight - 40) {
-      doc.addPage();
-      yPos = margin;
-    }
-    
-    yPos += 5;
-    // Add colored section header with background
-    doc.setFillColor(colors.background);
-    doc.rect(margin - 5, yPos - 5, pageWidth - (margin * 2) + 10, lineHeight + 10, 'F');
+  // Helper: Section header
+  const addSectionHeader = (title: string) => {
+    doc.addPage();
+    yPos = margin;
     doc.setFillColor(colors.primary);
-    doc.rect(margin - 5, yPos - 5, 5, lineHeight + 10, 'F');
-    addText(title, 14, true, colors.primary);
-    yPos += 5;
+    doc.roundedRect(margin, yPos, pageWidth - 2 * margin, 16, 4, 4, 'F');
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor('#fff');
+    doc.text(title, pageWidth / 2, yPos + 11, { align: 'center' });
+    yPos += 22;
   };
 
-  // Helper function to add a divider
-  const addDivider = () => {
-    yPos += 5;
-    doc.setDrawColor(colors.border);
-    doc.line(margin, yPos, pageWidth - margin, yPos);
-    yPos += 5;
-  };
-
-  // Helper function to add a box
-  const addBox = (content: string[], title?: string) => {
-    const boxHeight = (content.length + (title ? 1 : 0)) * lineHeight + 20;
-    const boxWidth = pageWidth - (margin * 2);
-    
-    // Check if we need a new page
-    if (yPos + boxHeight > pageHeight - margin) {
-      doc.addPage();
-      yPos = margin;
-    }
-
-    // Draw box
-    doc.setFillColor(colors.background);
-    doc.roundedRect(margin, yPos, boxWidth, boxHeight, 3, 3, 'F');
-    doc.setDrawColor(colors.border);
-    doc.roundedRect(margin, yPos, boxWidth, boxHeight, 3, 3, 'S');
-
-    // Add title if provided
+  // Helper: Content box
+  const addBox = (lines: string[], title?: string) => {
+    const boxWidth = pageWidth - 2 * margin;
+    const boxHeight = lines.length * lineHeight + (title ? 18 : 8);
+    if (yPos + boxHeight > pageHeight - margin) { doc.addPage(); yPos = margin; }
+    doc.setFillColor(colors.box);
+    doc.roundedRect(margin, yPos, boxWidth, boxHeight, 4, 4, 'F');
+    let y = yPos + 10;
     if (title) {
       doc.setFontSize(12);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(colors.primary);
-      doc.text(title, margin + 5, yPos + 10);
-      yPos += lineHeight;
+      doc.text(title, margin + 6, y);
+      y += lineHeight;
     }
-
-    // Add content
     doc.setFontSize(11);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(colors.text);
-    content.forEach(line => {
-      doc.text(line, margin + 5, yPos + 10);
-      yPos += lineHeight;
+    lines.forEach((line: string) => {
+      y = addWrappedText(line, margin + 6, y, boxWidth - 12, 11, colors.text);
     });
-
-    yPos += 10;
+    yPos += boxHeight + 8;
   };
 
-  // Add header with logo and title
-  doc.setFillColor(colors.primary);
-  doc.rect(0, 0, pageWidth, 40, 'F');
-  doc.setTextColor('#ffffff');
-  doc.setFontSize(24);
-  doc.setFont('helvetica', 'bold');
-  doc.text('SOLARMATE', pageWidth / 2, 20, { align: 'center' });
-  doc.setFontSize(16);
-  doc.text('SOLAR SYSTEM SIZING REPORT', pageWidth / 2, 30, { align: 'center' });
-  yPos = 50;
+  // Helper: Footer
+  const addFooter = () => {
+    const pageCount = doc.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFillColor(colors.footer);
+      doc.rect(0, pageHeight - 15, pageWidth, 15, 'F');
+      doc.setFontSize(10);
+      doc.setTextColor(colors.header);
+      doc.text('Created by Ibro Raheem', margin, pageHeight - 6, { align: 'left' });
+      doc.text('WhatsApp: +234 906 673 0744', pageWidth / 2, pageHeight - 6, { align: 'center' });
+      doc.text('Portfolio: ibroraheem.netlify.app', pageWidth - margin, pageHeight - 6, { align: 'right' });
+      doc.setTextColor(colors.text);
+      doc.text(`Page ${i} of ${pageCount}`, pageWidth / 2, pageHeight - 2, { align: 'center' });
+    }
+  };
 
-  // System Overview
-  addSection('System Overview');
+  // --- COVER PAGE ---
+  doc.setFillColor(colors.primary);
+  doc.rect(0, 0, pageWidth, pageHeight, 'F');
+  doc.setFontSize(32);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor('#fff');
+  doc.text('SOLARMATE', pageWidth / 2, 60, { align: 'center' });
+  doc.setFontSize(18);
+  doc.text('Comprehensive Solar System Sizing Report', pageWidth / 2, 80, { align: 'center' });
+  doc.setFontSize(14);
+  doc.setTextColor(colors.accent);
+  doc.text('Prepared for you by Ibro Raheem', pageWidth / 2, 100, { align: 'center' });
+  doc.setFontSize(12);
+  doc.setTextColor('#fff');
+  doc.text('WhatsApp: +234 906 673 0744', pageWidth / 2, 110, { align: 'center' });
+  doc.text('Portfolio: ibroraheem.netlify.app', pageWidth / 2, 120, { align: 'center' });
+  doc.setDrawColor(colors.accent);
+  doc.setLineWidth(1.5);
+  doc.line(margin, 130, pageWidth - margin, 130);
+  doc.setFontSize(10);
+  doc.setTextColor(colors.lightText);
+  doc.text('Generated on: ' + new Date().toLocaleDateString(), pageWidth / 2, 140, { align: 'center' });
+  doc.addPage();
+  yPos = margin;
+
+  // --- EXECUTIVE SUMMARY ---
+  addSectionHeader('Executive Summary');
+  addBox([
+    'This comprehensive solar system design report provides a detailed analysis of your energy requirements and a complete solution for your solar power needs.',
+    '',
+    'Key Highlights:',
+    `• Total System Capacity: ${results.solarPanels.totalWattage.toLocaleString()} W`,
+    `• Daily Energy Generation: ${results.solarPanels.dailyOutput.toFixed(2)} kWh`,
+    `• Battery Backup Duration: ${backupHours} hours`,
+    `• Estimated System Cost: NGN ${results.totalPrice[selectedBatteryType === 'Tubular' ? 'withTubular' : 'withLithium'].range.lowerBound.toLocaleString()} - NGN ${results.totalPrice[selectedBatteryType === 'Tubular' ? 'withTubular' : 'withLithium'].range.upperBound.toLocaleString()}`,
+    selectedState?.name ? `• Location: ${selectedState.name}` : ''
+  ], 'Report Overview');
+
+  // --- SYSTEM OVERVIEW ---
+  addSectionHeader('System Overview');
   addBox([
     `Total Load: ${results.peakLoad.toLocaleString()} W`,
     `Inverter Size: ${results.inverterSize} KVA`,
@@ -116,95 +144,58 @@ export const generatePDF = (results: SystemResults, selectedBatteryType: 'Tubula
     `Daily Output: ${results.solarPanels.dailyOutput.toFixed(2)} kWh/day`
   ]);
 
-  // Battery Specifications
-  addSection('Battery Specifications');
-  const battery = results.batteryOptions[selectedBatteryType.toLowerCase() as 'tubular' | 'lithium'];
+  // --- FINANCIAL ANALYSIS ---
+  addSectionHeader('Financial Analysis');
+  const dailyGeneration = results.solarPanels.dailyOutput;
+  const annualGeneration = dailyGeneration * 365;
+  const currentRate = 225; // NGN per kWh
+  const annualSavings = annualGeneration * currentRate;
+  const systemCost = results.totalPrice[selectedBatteryType === 'Tubular' ? 'withTubular' : 'withLithium'].base;
+  const paybackPeriod = systemCost / annualSavings;
+  const batteryLife = selectedBatteryType === 'Tubular' ? 3 : 8; // years
+  const batteryReplacements = Math.ceil(25 / batteryLife) - 1;
+  const batteryCost = results.batteryOptions[selectedBatteryType.toLowerCase() as 'tubular' | 'lithium'].totalPrice;
+  const totalBatteryCost = batteryCost * batteryReplacements;
+  const maintenanceCost = systemCost * 0.05 * 25;
+  const total25YearCost = systemCost + totalBatteryCost + maintenanceCost;
+  const total25YearSavings = annualSavings * 25;
+  const netSavings = total25YearSavings - total25YearCost;
   addBox([
-    `Battery Type: ${battery.type}`,
-    `Model: ${battery.modelName}`,
-    `Voltage: ${battery.voltage}V`,
-    `Capacity: ${battery.capacity}Ah`,
-    `Total Capacity: ${(battery.totalCapacity / 1000).toFixed(1)} kWh`,
-    `Depth of Discharge: ${battery.type === 'Tubular' ? '50%' : '90%'}`,
-    `Battery Price: ${formatCurrency(battery.totalPrice).replace('₦', 'NGN ')}`
+    'Financial Calculations:',
+    '',
+    '1. Energy Generation:',
+    `• Daily Generation: ${dailyGeneration.toFixed(2)} kWh`,
+    `• Annual Generation: ${annualGeneration.toFixed(2)} kWh`,
+    '',
+    '2. Cost Savings:',
+    `• Current Electricity Rate: NGN ${currentRate}/kWh`,
+    `• Annual Savings: NGN ${annualSavings.toLocaleString()}`,
+    `• Monthly Savings: NGN ${(annualSavings / 12).toLocaleString()}`,
+    '',
+    '3. System Costs:',
+    `• Initial System Cost: NGN ${systemCost.toLocaleString()}`,
+    `• Battery Replacements (${batteryReplacements} times): NGN ${totalBatteryCost.toLocaleString()}`,
+    `• Maintenance (25 years): NGN ${maintenanceCost.toLocaleString()}`,
+    `• Total 25-Year Cost: NGN ${total25YearCost.toLocaleString()}`,
+    '',
+    '4. Return on Investment:',
+    `• Payback Period: ${paybackPeriod.toFixed(1)} years`,
+    `• 25-Year Savings: NGN ${total25YearSavings.toLocaleString()}`,
+    `• Net Savings: NGN ${netSavings.toLocaleString()}`]);
+
+  // --- ENVIRONMENTAL IMPACT ---
+  addSectionHeader('Environmental Impact');
+  const annualCO2Reduction = results.solarPanels.dailyOutput * 365 * 0.5; 
+  const treesEquivalent = Math.ceil(annualCO2Reduction * 50);
+  addBox([
+    'Carbon Footprint Reduction:',
+    `• Annual CO₂ Reduction: ${annualCO2Reduction.toFixed(2)} tons`,
+    `• Equivalent to planting ${treesEquivalent} trees per year`,
+    '',
   ]);
 
-  // Solar Panel Specifications
-  addSection('Solar Panel Specifications');
-  addBox([
-    `Panel Type: Jinko 550W`,
-    `Total Capacity: ${results.solarPanels.totalWattage.toLocaleString()} W`,
-    `Panel Price: ${formatCurrency(results.solarPanels.price).replace('₦', 'NGN ')}`
-  ]);
-
-  // System Components
-  addSection('System Components');
-  
-  // AC Side Components
-  addBox([
-    `Breaker: ${results.components.acBreaker.size}A MCB`,
-    `Current Rating: ${results.components.acBreaker.current.toFixed(1)}A`,
-    `Cable: ${results.components.acBreaker.cableSize}mm² Copper`,
-    `Changeover Switch: ${results.components.changeoverSwitch.size}A ${results.components.changeoverSwitch.type}`,
-    `Switch Current Rating: ${results.components.changeoverSwitch.current.toFixed(1)}A`,
-    `AVR: ${results.components.avr.size}kVA`,
-    `AVR Rating: ${results.components.avr.kva.toFixed(1)}kVA`
-  ], 'AC Side Components');
-
-  // DC Side Components
-  addBox([
-    `Breaker: ${results.components.dcBreaker.size}A MCB`,
-    `Current Rating: ${results.components.dcBreaker.current.toFixed(1)}A`,
-    `Cable: ${results.components.dcBreaker.cableSize}mm² Copper`
-  ], 'DC Side Components');
-
-  // Core Components Price
-  addSection('Core Components Price');
-  const totalPrice = selectedBatteryType === 'Tubular' 
-    ? results.totalPrice.withTubular 
-    : results.totalPrice.withLithium;
-  
-  addBox([
-    'This price includes:',
-    '• Inverter',
-    '• Solar Panels',
-    '• Battery Bank'
-  ]);
-
-  // Add total price with emphasis
-  doc.setFontSize(16);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(colors.primary);
-  doc.text(formatCurrency(totalPrice).replace('₦', 'NGN '), pageWidth / 2, yPos + 10, { align: 'center' });
-  yPos += lineHeight * 2;
-
-  // Add pricing disclaimer
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'italic');
-  doc.setTextColor(colors.lightText);
-  doc.text('*Prices shown are supplier prices for core components only. Additional costs include:', margin, yPos);
-  yPos += lineHeight;
-  doc.text('• Installation and labor charges', margin + 5, yPos);
-  yPos += lineHeight;
-  doc.text('• Additional components (cables, breakers, etc.)', margin + 5, yPos);
-  yPos += lineHeight;
-  doc.text('• Transportation and logistics', margin + 5, yPos);
-  yPos += lineHeight;
-  doc.text('Final price may vary based on market conditions and specific requirements.', margin, yPos);
-
-  // Add footer
-  const pageCount = doc.getNumberOfPages();
-  for (let i = 1; i <= pageCount; i++) {
-    doc.setPage(i);
-    doc.setFontSize(10);
-    doc.setTextColor(colors.lightText);
-    doc.text(
-      `Generated by SolarMate • Page ${i} of ${pageCount}`,
-      pageWidth / 2,
-      pageHeight - 10,
-      { align: 'center' }
-    );
-  }
+  // --- FOOTER ---
+  addFooter();
 
   // Save the PDF
   doc.save('solar-system-report.pdf');

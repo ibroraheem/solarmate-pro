@@ -9,6 +9,37 @@ import {
 } from '../data/system';
 import { calculateSystemComponents } from './systemCalculations';
 
+// State-specific PSH data from Zenevista (updated from user screenshots)
+const STATE_PSH_DATA: { [key: string]: number } = {
+  'Adamawa': 6.4,
+  'Akwa Ibom': 5.8,
+  'Anambra': 5.6,
+  'Bauchi': 6.2,
+  'Bayelsa': 5.4,
+  'Benue': 6.0,
+  'Borno': 5.8,
+  'Cross River': 5.6,
+  'Delta': 5.4,
+  'Ebonyi': 6.0,
+  'Edo': 5.6,
+  'Ekiti': 5.4,
+  'Enugu': 6.0,
+  'Gombe': 5.4,
+  'Imo': 5.6,
+  'Jigawa': 5.6,
+  'Kaduna': 6.8,
+  'Kano': 6.6,
+  'Katsina': 6.2,
+  'Kebbi': 6.0,
+  'Kogi': 5.8,
+  'Kwara': 5.6,
+  'Lagos': 5.4,
+  'Niger': 5.8,
+  'Ogun': 5.6,
+  'Ondo': 5.4,
+  'Yobe': 7.2
+};
+
 export const calculateResults = (
   selectedAppliances: SelectedAppliance[],
   backupHours: number,
@@ -57,6 +88,9 @@ export const calculateResults = (
   // Calculate backup energy
   const backupEnergy = dailyEnergy * (backupHours / 24);
 
+  // Get state-specific PSH or use default
+  const psh = selectedState ? STATE_PSH_DATA[selectedState.name] || DEFAULT_PSH : DEFAULT_PSH;
+
   // Calculate battery bank capacity for tubular battery
   const tubularBankAh = backupEnergy / (systemVoltage * tubularBattery.depthOfDischarge);
   const tubularBatteriesInSeries = systemVoltage / tubularBattery.voltage;
@@ -92,7 +126,7 @@ export const calculateResults = (
     
     // Find the most cost-effective option
     let bestOption = { 
-      model: null, 
+      model: null as typeof lithiumBatteries[0] | null, 
       count: Infinity, 
       totalPrice: Infinity 
     };
@@ -130,9 +164,24 @@ export const calculateResults = (
     }
   }
 
-  // Calculate solar panel requirement
-  const psh = selectedState ? selectedState.psh : DEFAULT_PSH;
-  const panelCount = Math.ceil(backupEnergy / (solarPanel.wattage * psh));
+  // Calculate solar panel requirement with state-specific PSH
+  // First calculate battery capacity in kWh
+  const batteryCapacity = systemVoltage === 24 || systemVoltage === 48
+    ? totalLithiumCapacity / 1000 // Convert Wh to kWh for lithium
+    : totalTubularCapacity / 1000; // Convert Wh to kWh for tubular
+
+  // Calculate required daily generation based on both backup energy and battery capacity
+  // We need enough solar to either meet daily energy needs OR fully charge the batteries, whichever is larger
+  const requiredDailyGeneration = Math.max(
+    backupEnergy / 1000, // Daily energy needs in kWh
+    batteryCapacity // Battery capacity in kWh
+  );
+
+  // Calculate minimum solar capacity needed considering PSH
+  const requiredSolarCapacity = requiredDailyGeneration / psh;
+  
+  // Calculate number of panels needed
+  const panelCount = Math.ceil(requiredSolarCapacity * 1000 / solarPanel.wattage);
   const panelTotalWattage = panelCount * solarPanel.wattage;
   const dailyOutput = (panelTotalWattage * psh) / 1000; // in kWh
   const panelTotalPrice = panelCount * solarPanel.price;
@@ -143,9 +192,18 @@ export const calculateResults = (
   );
   const inverterPrice = selectedInverter ? selectedInverter.price : 0;
 
-  // Calculate total system price
+  // Calculate total system price with ranges
+  const calculatePriceRange = (basePrice: number) => {
+    const lowerBound = Math.floor(basePrice * 0.85); // 15% lower
+    const upperBound = Math.ceil(basePrice * 1.15); // 15% higher
+    return { lowerBound, upperBound };
+  };
+
   const totalPriceWithTubular = inverterPrice + totalTubularPrice + panelTotalPrice;
   const totalPriceWithLithium = inverterPrice + totalLithiumPrice + panelTotalPrice;
+
+  const tubularPriceRange = calculatePriceRange(totalPriceWithTubular);
+  const lithiumPriceRange = calculatePriceRange(totalPriceWithLithium);
 
   const lithiumBatteryOption = {
     type: 'Lithium' as const,
@@ -157,7 +215,8 @@ export const calculateResults = (
     price: selectedLithium ? selectedLithium.price : 0,
     count: lithiumCount,
     totalCapacity: totalLithiumCapacity,
-    totalPrice: totalLithiumPrice
+    totalPrice: totalLithiumPrice,
+    priceRange: calculatePriceRange(totalLithiumPrice)
   };
 
   const tubularBatteryOption = {
@@ -168,7 +227,8 @@ export const calculateResults = (
     price: tubularBattery.price,
     count: totalTubularCount,
     totalCapacity: totalTubularCapacity,
-    totalPrice: totalTubularPrice
+    totalPrice: totalTubularPrice,
+    priceRange: calculatePriceRange(totalTubularPrice)
   };
 
   // Calculate system components
@@ -192,13 +252,29 @@ export const calculateResults = (
       count: panelCount,
       totalWattage: panelTotalWattage,
       dailyOutput,
-      price: panelTotalPrice
+      price: panelTotalPrice,
+      priceRange: calculatePriceRange(panelTotalPrice)
     },
     totalPrice: {
-      withTubular: totalPriceWithTubular,
-      withLithium: totalPriceWithLithium
+      withTubular: {
+        base: totalPriceWithTubular,
+        range: tubularPriceRange
+      },
+      withLithium: {
+        base: totalPriceWithLithium,
+        range: lithiumPriceRange
+      }
     },
-    components
+    components,
+    priceDisclaimer: {
+      factors: [
+        'Market conditions and exchange rates',
+        'Installation complexity and location',
+        'Additional components and accessories',
+        'Transportation and logistics costs',
+        'Seasonal variations in component availability'
+      ]
+    }
   };
 };
 

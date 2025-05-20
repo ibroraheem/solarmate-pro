@@ -16,6 +16,11 @@ export interface State {
   psh: number;
 }
 
+export interface PriceRange {
+  lowerBound: number;
+  upperBound: number;
+}
+
 export interface BatteryOption {
   type: 'Tubular' | 'Lithium';
   modelName: string;
@@ -25,6 +30,7 @@ export interface BatteryOption {
   count: number;
   totalCapacity: number; // Wh
   totalPrice: number;
+  priceRange: PriceRange;
 }
 
 export interface SystemComponents {
@@ -64,12 +70,22 @@ export interface SystemResults {
     totalWattage: number;
     dailyOutput: number;
     price: number;
+    priceRange: PriceRange;
   };
   totalPrice: {
-    withTubular: number;
-    withLithium: number;
+    withTubular: {
+      base: number;
+      range: PriceRange;
+    };
+    withLithium: {
+      base: number;
+      range: PriceRange;
+    };
   };
   components: SystemComponents;
+  priceDisclaimer: {
+    factors: string[];
+  };
 }
 
 export type Step = 'appliances' | 'summary' | 'results';

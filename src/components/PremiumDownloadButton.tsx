@@ -2,16 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { initializePaystack, loadPaystackScript, hasPaid } from '../services/paystack';
 import { SystemResults } from '../types';
 import { generatePDF } from '../utils/pdfGenerator';
-import PaymentHistory from './PaymentHistory';
 
 interface PremiumDownloadButtonProps {
   results: SystemResults;
   selectedBatteryType: 'Tubular' | 'Lithium';
+  backupHours: number;
+  selectedState?: { name: string; psh: number };
 }
 
 const PremiumDownloadButton: React.FC<PremiumDownloadButtonProps> = ({
   results,
   selectedBatteryType,
+  backupHours,
+  selectedState
 }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [email, setEmail] = useState('');
@@ -39,7 +42,7 @@ const PremiumDownloadButton: React.FC<PremiumDownloadButtonProps> = ({
         setIsLoading(false);
         setIsPaid(true);
         // Generate PDF after successful payment
-        generatePDF(results, selectedBatteryType);
+        generatePDF(results, selectedBatteryType, backupHours, selectedState);
       });
     } catch (error) {
       console.error('Payment failed:', error);
@@ -47,12 +50,12 @@ const PremiumDownloadButton: React.FC<PremiumDownloadButtonProps> = ({
     }
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!isPaid) {
       handlePayment();
       return;
     }
-    generatePDF(results, selectedBatteryType);
+    generatePDF(results, selectedBatteryType, backupHours, selectedState);
   };
 
   return (
@@ -67,6 +70,10 @@ const PremiumDownloadButton: React.FC<PremiumDownloadButtonProps> = ({
           <li>Detailed pricing breakdown</li>
           <li>Technical specifications</li>
           <li>System performance analysis</li>
+          <li>Solar laws and regulations</li>
+          <li>Location-based solar data</li>
+          <li>Environmental impact analysis</li>
+          <li>Maintenance and warranty information</li>
         </ul>
       </div>
       <input
@@ -86,7 +93,6 @@ const PremiumDownloadButton: React.FC<PremiumDownloadButtonProps> = ({
       <p className="text-xs text-gray-500 text-center">
         Secure payment powered by Paystack
       </p>
-      <PaymentHistory />
     </div>
   );
 };
