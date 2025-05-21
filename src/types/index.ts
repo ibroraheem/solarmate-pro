@@ -102,3 +102,12 @@ export interface PetrolGenerator {
 }
 
 export type Step = 'appliances' | 'summary' | 'results';
+
+export interface SolarPanelResult {
+  count: number;
+  totalWattage: number;
+  dailyOutput: number;
+  modelName: string;
+  price: number;
+  priceRange?: PriceRange;
+}

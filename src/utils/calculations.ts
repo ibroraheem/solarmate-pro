@@ -69,6 +69,43 @@ const calculateGeneratorRunningCost = (generator: typeof petrolGenerators[0], da
   return estimatedAnnualCost;
 };
 
+// Calculate required solar panels based on both daily energy needs and battery charging
+const calculateRequiredPanels = (
+  dailyEnergyNeeded: number,
+  batteryCapacity: number,
+  psh: number
+): SolarPanelResult => {
+  // Calculate energy needed for daily consumption
+  const dailyConsumptionEnergy = dailyEnergyNeeded;
+
+  // Calculate energy needed to charge batteries (80% depth of discharge)
+  const batteryChargingEnergy = (batteryCapacity * 0.8) / 0.9; // 0.9 is charging efficiency
+
+  // Total daily energy requirement
+  const totalDailyEnergyNeeded = dailyConsumptionEnergy + batteryChargingEnergy;
+
+  // Add 20% buffer for system losses and future expansion
+  const energyWithBuffer = totalDailyEnergyNeeded * 1.2;
+
+  // Calculate required panel wattage
+  const requiredWattage = Math.ceil(energyWithBuffer / psh);
+
+  // Round up to nearest standard panel size (400W)
+  const panelCount = Math.ceil(requiredWattage / 400);
+  const totalWattage = panelCount * 400;
+
+  // Calculate daily output with the actual panel configuration
+  const dailyOutput = (totalWattage * psh) / 1000; // Convert to kWh
+
+  return {
+    count: panelCount,
+    totalWattage,
+    dailyOutput,
+    modelName: '400W Monocrystalline',
+    price: panelCount * 45000 // NGN 45,000 per panel
+  };
+};
+
 export const calculateResults = (
   selectedAppliances: SelectedAppliance[],
   backupHours: number,
@@ -197,13 +234,12 @@ export const calculateResults = (
     }
   }
 
-  // Calculate solar panel requirement with state-specific PSH
-  const requiredDailyGeneration = backupEnergy / 1000; // Convert to kWh
-  const requiredSolarCapacity = requiredDailyGeneration / psh;
-  const panelCount = Math.ceil(requiredSolarCapacity * 1000 / solarPanel.wattage);
-  const panelTotalWattage = panelCount * solarPanel.wattage;
-  const dailyOutput = (panelTotalWattage * psh) / 1000; // in kWh
-  const panelTotalPrice = panelCount * solarPanel.price;
+  // Calculate required solar panels
+  const solarPanels = calculateRequiredPanels(
+    dailyEnergy,
+    backupEnergy,
+    psh
+  );
 
   // Calculate inverter price
   const selectedInverter = inverterSpecs.find(
@@ -218,8 +254,8 @@ export const calculateResults = (
     return { lowerBound, upperBound };
   };
 
-  const totalPriceWithTubular = inverterPrice + totalTubularPrice + panelTotalPrice;
-  const totalPriceWithLithium = inverterPrice + totalLithiumPrice + panelTotalPrice;
+  const totalPriceWithTubular = inverterPrice + totalTubularPrice + solarPanels.price;
+  const totalPriceWithLithium = inverterPrice + totalLithiumPrice + solarPanels.price;
 
   const tubularPriceRange = calculatePriceRange(totalPriceWithTubular);
   const lithiumPriceRange = calculatePriceRange(totalPriceWithLithium);
@@ -303,13 +339,7 @@ export const calculateResults = (
       tubular: tubularBatteryOption,
       lithium: lithiumBatteryOption
     },
-    solarPanels: {
-      count: panelCount,
-      totalWattage: panelTotalWattage,
-      dailyOutput,
-      price: panelTotalPrice,
-      priceRange: calculatePriceRange(panelTotalPrice)
-    },
+    solarPanels,
     totalPrice: {
       withTubular: {
         base: totalPriceWithTubular,
