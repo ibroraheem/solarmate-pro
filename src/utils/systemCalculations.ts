@@ -48,6 +48,11 @@ export interface SystemComponents {
     size: number;
     type: 'Manual' | 'Automatic';
   };
+  standardSizes: {
+    breakerSizes: number[];
+    avrSizes: number[];
+    cableSizes: { maxCurrent: number; size: number }[];
+  };
 }
 
 export const calculateSystemComponents = (
@@ -56,43 +61,52 @@ export const calculateSystemComponents = (
   batteryVoltage: number
 ): SystemComponents => {
   // AC Side Breaker Calculation
-  const acCurrent = (loadPower / (230 * 0.8)) * 1.25;
+  const acCurrent = (loadPower / (230 * 0.8));
+  const acCurrentWithAllowance = acCurrent * 1.25;
   const acBreakerSize = roundUpToStandard(acCurrent, BREAKER_SIZES);
-  const acCableSize = getCableSize(acBreakerSize);
+  const acCableSize = getCableSize(acCurrentWithAllowance);
 
   // DC Side Breaker Calculation
-  const dcCurrent = (inverterPower / batteryVoltage) * 1.25;
+  const dcCurrent = (inverterPower / batteryVoltage);
+  const dcCurrentWithAllowance = dcCurrent * 1.25;
   const dcBreakerSize = roundUpToStandard(dcCurrent, BREAKER_SIZES);
-  const dcCableSize = getCableSize(dcBreakerSize);
+  const dcCableSize = getCableSize(dcCurrentWithAllowance);
 
   // AVR Calculation
-  const avrKva = (loadPower / (1000 * 0.8)) * 1.2;
-  const avrSize = roundUpToStandard(avrKva, AVR_SIZES);
+  const avrKva = (loadPower / (1000 * 0.8));
+  const avrKvaWithAllowance = avrKva * 1.25;
+  const avrSize = roundUpToStandard(avrKvaWithAllowance, AVR_SIZES);
 
   // Changeover Switch Calculation
-  const switchCurrent = (inverterPower / (230 * 0.8)) * 1.25;
+  const switchCurrent = (inverterPower / (230 * 0.8));
+  const switchCurrentWithAllowance = switchCurrent * 1.25;
   const switchSize = roundUpToStandard(switchCurrent, [32, 63, 100, 125, 160]);
   const switchType = inverterPower >= 5000 ? 'Automatic' : 'Manual';
 
   return {
     acBreaker: {
-      current: acCurrent,
+      current: acCurrentWithAllowance,
       size: acBreakerSize,
       cableSize: acCableSize
     },
     dcBreaker: {
-      current: dcCurrent,
+      current: dcCurrentWithAllowance,
       size: dcBreakerSize,
       cableSize: dcCableSize
     },
     avr: {
-      kva: avrKva,
+      kva: avrKvaWithAllowance,
       size: avrSize
     },
     changeoverSwitch: {
-      current: switchCurrent,
+      current: switchCurrentWithAllowance,
       size: switchSize,
       type: switchType
+    },
+    standardSizes: {
+      breakerSizes: BREAKER_SIZES,
+      avrSizes: AVR_SIZES,
+      cableSizes: CABLE_SIZES
     }
   };
 }; 

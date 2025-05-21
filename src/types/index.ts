@@ -53,6 +53,11 @@ export interface SystemComponents {
     size: number;
     type: 'Manual' | 'Automatic';
   };
+  standardSizes: {
+    breakerSizes: number[];
+    avrSizes: number[];
+    cableSizes: { maxCurrent: number; size: number }[];
+  };
 }
 
 export interface SystemResults {

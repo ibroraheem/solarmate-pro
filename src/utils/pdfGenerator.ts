@@ -332,8 +332,6 @@ export const generatePDF = (
     ], 'Generator Comparison');
   }
 
-  addBox(financialContent, 'Financial Analysis');
-
   // --- ENVIRONMENTAL IMPACT ---
   addSectionHeader('Environmental Impact');
 
@@ -364,6 +362,36 @@ export const generatePDF = (
     '• Positive environmental legacy',
     '• Support for clean energy transition',
   ], 'Long-term Impact');
+
+  // --- BILL OF MATERIALS ---
+  addSectionHeader('Bill of Materials');
+
+  // AC Breakers
+  addBox([
+    `Recommended Size: ${results.components.acBreaker.size} A`,
+  ], 'AC Breaker');
+
+  // DC Breakers
+  addBox([
+    `Recommended Size: ${results.components.dcBreaker.size} A`,
+  ], 'DC Breaker');
+
+  // AVR
+  addBox([
+    `Recommended Size: ${results.components.avr.size} kVA`,
+  ], 'AVR');
+
+  // Cables (AC and DC will likely use the same sizing logic based on current, but we can list both)
+  addBox([
+    `AC Cable Size for ${results.components.acBreaker.size}A Breaker: ${results.components.acBreaker.cableSize} mm²`,
+    `DC Cable Size for ${results.components.dcBreaker.size}A Breaker: ${results.components.dcBreaker.cableSize} mm²`,
+  ], 'Cable Sizing');
+
+  // Changeover Switch
+  addBox([
+    `Recommended Size: ${results.components.changeoverSwitch.size} A (${results.components.changeoverSwitch.type})`,
+    results.inverterSize >= 5 ? 'Note: For systems 5kVA and above, an Automatic changeover switch is recommended for convenience, if financial constraints are not a primary concern.' : 'Note: For systems below 5kVA, a Manual changeover switch is typically sufficient.',
+  ], 'Changeover Switch');
 
   // --- FOOTER ---
   addFooter();
