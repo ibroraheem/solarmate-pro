@@ -16,16 +16,16 @@ export const generatePDF = (
 
   // Modern color palette
   const colors = {
-    primary: '#16a34a', // green
-    accent: '#fbbf24', // yellow
-    background: '#f8fafc', // light
-    text: '#1f2937', // dark
-    lightText: '#6b7280',
-    border: '#e2e8f0',
-    section: '#e0f2fe', // light blue
-    box: '#f1f5f9', // very light
-    header: '#15803d', // deep green
-    footer: '#fbbf24', // yellow
+    primary: '#2c3e50', // Dark Slate Blue
+    accent: '#e74c3c', // Red Orange
+    background: '#ecf0f1', // Light Grayish Blue
+    text: '#34495e', // Darker Slate Blue
+    lightText: '#7f8c8d', // Gray
+    border: '#bdc3c7', // Silver
+    section: '#d5dbdb', // Light Gray
+    box: '#ffffff', // White
+    header: '#2c3e50', // Dark Slate Blue
+    footer: '#34495e', // Darker Slate Blue
   };
 
   // Helper: Add wrapped text
@@ -43,18 +43,14 @@ export const generatePDF = (
 
   // Helper: Section header
   const addSectionHeader = (title: string) => {
-    // If current yPos is already at margin (start of a new page), just use it.
-    // Otherwise, add some space before the new section header if needed, or a new page if too close to the bottom.
-    if (yPos > margin) {
-      // Add a new page if remaining space is less than header height + minimum box margin
-      if (yPos + 16 + 8 > pageHeight - margin) { // 16 for header height, 8 for minimum box padding
-        doc.addPage();
-        yPos = margin;
-      } else {
-        yPos += 15; // Add space before the new section header if on the same page
-      }
+    // Always add a new page before a section header, unless it's the first section after the cover.
+    if (yPos !== margin + 16 + 6) { // Check if yPos is NOT right after the cover page's header + spacing
+      doc.addPage();
+      yPos = margin; // Reset yPos for the new page
+    } else {
+      // If it is the first section after the cover, just ensure yPos is set correctly.
+      yPos = margin; // Although it should already be here due to addPage after cover
     }
-    // If yPos is at margin, it's already correct for a new page.
 
     doc.setFillColor(colors.primary);
     doc.roundedRect(margin, yPos, pageWidth - 2 * margin, 16, 4, 4, 'F');
@@ -80,8 +76,8 @@ export const generatePDF = (
 
     // Draw the box at the current yPos
     doc.setFillColor(colors.box);
-    doc.roundedRect(margin, yPos, boxWidth, requiredHeight + 8, 4, 4, 'F'); // Add 8 for bottom padding/margin
-    let y = yPos + (title ? 18 : 8); // Starting Y for text inside the box
+    doc.roundedRect(margin, yPos, boxWidth, requiredHeight + 6, 4, 4, 'F'); // Reduced bottom padding to 6
+    let y = yPos + (title ? 16 : 6); // Reduced top padding in box
     
     if (title) {
       doc.setFontSize(12);
@@ -103,7 +99,7 @@ export const generatePDF = (
       y = addWrappedText(line, margin + 6, y, boxWidth - 12, 11, colors.text);
     });
     
-    yPos = y + 8;
+    yPos = y + 6; // Reduced space after box
   };
 
   // Helper: Footer
@@ -114,12 +110,12 @@ export const generatePDF = (
       doc.setFillColor(colors.footer);
       doc.rect(0, pageHeight - 15, pageWidth, 15, 'F');
       doc.setFontSize(10);
-      doc.setTextColor(colors.header);
+      doc.setTextColor('#fff'); // White text on footer
       doc.text('Created by Ibrahim Abdulraheem', margin, pageHeight - 6, { align: 'left' });
       doc.text('WhatsApp: +234 906 673 0744', pageWidth / 2, pageHeight - 6, { align: 'center' });
       doc.text('Portfolio: ibroraheem.netlify.app', pageWidth - margin, pageHeight - 6, { align: 'right' });
-      doc.setTextColor(colors.text);
-      doc.text(`Page ${i} of ${pageCount}`, pageWidth / 2, pageHeight - 2, { align: 'center' });
+      doc.setTextColor('#fff'); // White text for page numbers
+      doc.text(`${i}`, pageWidth / 2, pageHeight - 6, { align: 'center' }); // Simple page number
     }
   };
 
@@ -152,7 +148,7 @@ export const generatePDF = (
   
   // Author Info
   doc.setFontSize(14);
-  doc.setTextColor(colors.accent);
+  doc.setTextColor('#fff'); // Author info on cover page white
   doc.text('Prepared by:', pageWidth / 2, 200, { align: 'center' });
   doc.setFontSize(12);
   doc.text('Ibrahim Abdulraheem', pageWidth / 2, 215, { align: 'center' });
