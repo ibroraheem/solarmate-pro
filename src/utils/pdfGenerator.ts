@@ -366,32 +366,30 @@ export const generatePDF = (
   // --- BILL OF MATERIALS ---
   addSectionHeader('Bill of Materials');
 
-  // AC Breakers
-  addBox([
-    `Recommended Size: ${results.components.acBreaker.size} A`,
-  ], 'AC Breaker');
+  const batteryOption = results.batteryOptions[selectedBatteryType.toLowerCase() as 'tubular' | 'lithium'];
 
-  // DC Breakers
   addBox([
-    `Recommended Size: ${results.components.dcBreaker.size} A`,
-  ], 'DC Breaker');
-
-  // AVR
-  addBox([
-    `Recommended Size: ${results.components.avr.size} kVA`,
-  ], 'AVR');
-
-  // Cables (AC and DC will likely use the same sizing logic based on current, but we can list both)
-  addBox([
-    `AC Cable Size for ${results.components.acBreaker.size}A Breaker: ${results.components.acBreaker.cableSize} mm²`,
-    `DC Cable Size for ${results.components.dcBreaker.size}A Breaker: ${results.components.dcBreaker.cableSize} mm²`,
-  ], 'Cable Sizing');
-
-  // Changeover Switch
-  addBox([
-    `Recommended Size: ${results.components.changeoverSwitch.size} A (${results.components.changeoverSwitch.type})`,
-    results.inverterSize >= 5 ? 'Note: For systems 5kVA and above, an Automatic changeover switch is recommended for convenience, if financial constraints are not a primary concern.' : 'Note: For systems below 5kVA, a Manual changeover switch is typically sufficient.',
-  ], 'Changeover Switch');
+    'Based on your requirements, here is a list of the main components needed:',
+    '',
+    `• Inverter: 1 x ${results.inverterSize} kVA Hybrid Inverter`,
+    `• Solar Panels: ${results.solarPanels.count} x ${results.solarPanels.totalWattage / results.solarPanels.count}W Monocrystalline Solar Panels`,
+    `• Battery Bank: ${batteryOption.count} x ${batteryOption.modelName} (${(batteryOption.totalCapacity / 1000).toFixed(1)} kWh)`,
+    `• AC Breaker: 1 x ${results.components.acBreaker.size} A`,
+    `• DC Breaker: 1 x ${results.components.dcBreaker.size} A`,
+    `• AVR: 1 x ${results.components.avr.size} kVA`,
+    `• Recommended AC Cable Size: ${results.components.acBreaker.cableSize} mm²`,
+    `• Recommended DC Cable Size: ${results.components.dcBreaker.cableSize} mm²`,
+    `• Changeover Switch: 1 x ${results.components.changeoverSwitch.size} A (${results.components.changeoverSwitch.type})`,
+    results.inverterSize >= 5 ? '  (Note: Automatic recommended for 5kVA+ if no major financial constraint)' : '  (Note: Manual typically sufficient below 5kVA)',
+    '',
+    'Important Considerations:',
+    '',
+    '• A site visit is required to determine accurate cable lengths, optimal panel orientations, and for a comprehensive site survey.',
+    '• Additional components (e.g., surge protectors, trunking, mounting structure) may be required based on the site survey.',
+    '',
+    'For further details and site assessment, please contact Ibrahim Abdulraheem:',
+    'WhatsApp: +234 906 673 0744',
+  ], 'Bill of Materials');
 
   // --- FOOTER ---
   addFooter();

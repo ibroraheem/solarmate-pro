@@ -98,6 +98,8 @@ export interface SystemResults {
   netSavings: number;
   pvInputWarning?: string;
   recommendedInverterSizeForPV?: number;
+  parallelingNote?: string;
+  systemSizeLimitNote?: string;
 }
 
 export interface PetrolGenerator {

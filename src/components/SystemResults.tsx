@@ -41,6 +41,12 @@ const SystemResults: React.FC<SystemResultsProps> = ({
             <span className="font-semibold">Note:</span> Our system sizing calculator currently supports systems up to 10kVA. We are working to expand our capacity for larger systems. For systems above 10kVA, please contact us directly for a custom quote.
           </p>
         </div>
+        {/* System Size Limit Note */}
+        {results.systemSizeLimitNote && (
+          <div className="mb-6 p-4 bg-orange-100 rounded-lg border border-orange-400 text-orange-800">
+            <p className="text-sm font-semibold">{results.systemSizeLimitNote}</p>
+          </div>
+        )}
         <h2 className="text-2xl font-bold text-gray-800 mb-4">System Sizing Results</h2>
         <div className="bg-white rounded-lg shadow-md overflow-hidden">
           <div className="bg-gradient-to-r from-green-600 to-green-700 p-6 text-white">
@@ -104,6 +110,13 @@ const SystemResults: React.FC<SystemResultsProps> = ({
                 </div>
               </div>
             </div>
+            
+            {/* Paralleling Note */}
+            {results.parallelingNote && (
+              <div className="mt-4 p-3 bg-blue-100 border border-blue-400 text-blue-700 rounded-md">
+                <p className="text-sm font-medium">{results.parallelingNote}</p>
+              </div>
+            )}
             
             {/* PV Input Warning */}
             {results.pvInputWarning && (

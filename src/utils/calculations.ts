@@ -299,14 +299,18 @@ export const calculateResults = (
       (spec) => spec.maxPvInputWattage >= solarPanels.totalWattage
     );
 
+    // Base message about clipping
+    pvInputWarning =
+      `Note: The recommended total solar panel wattage (${solarPanels.totalWattage}W) is calculated to meet your daily energy needs and battery charging. However, it exceeds the current ${selectedInverter.size} kVA inverter's estimated maximum PV input capacity (${maxPvInputWattage}W). This means the inverter can only utilize up to ${maxPvInputWattage}W from the solar array at any given time, leading to 'clipping' and reduced overall energy harvest.`;
+
     if (largerInverter) {
-      pvInputWarning =
-        `Note: The recommended total solar panel wattage (${solarPanels.totalWattage}W) is calculated to meet your daily energy needs and battery charging. However, it exceeds the current ${selectedInverter.size} kVA inverter's estimated maximum PV input capacity (${maxPvInputWattage}W). This means the inverter can only utilize up to ${maxPvInputWattage}W from the solar array at any given time, leading to 'clipping' and reduced overall energy harvest.`;
-      recommendedInverterSizeForPV = largerInverter.size;
+      // If a suitable larger inverter exists in our data, recommend it and mention extra controller
+      pvInputWarning += ` To fully utilize the ${solarPanels.totalWattage}W solar array, we recommend using a larger inverter, such as the ${largerInverter.size} kVA model, which has an estimated maximum PV input capacity of ${largerInverter.maxPvInputWattage}W. An alternative solution involves using an extra charge controller for the excess panels; please contact us directly for calculations and details on this approach.`;
+      recommendedInverterSizeForPV = largerInverter.size; // Set recommended size for recalculation button
     } else {
-      // Fallback message if no larger inverter is found in the data
-      pvInputWarning =
-        `Note: The recommended total solar panel wattage (${solarPanels.totalWattage}W) is calculated to meet your daily energy needs and battery charging. However, it exceeds the current ${selectedInverter.size} kVA inverter's estimated maximum PV input capacity (${maxPvInputWattage}W). This means the inverter can only utilize up to ${maxPvInputWattage}W from the solar array at any given time, leading to 'clipping' and reduced overall energy harvest. We do not have a larger inverter in our current data that can fully utilize this solar array.`;
+      // If no suitable larger inverter exists in our data, ask user to contact for custom solution
+      pvInputWarning += ` Utilizing this solar array requires a larger inverter than available in this tool's current data. Please contact us directly for a custom solution.`;
+      recommendedInverterSizeForPV = undefined; // Ensure recommended size is not set if no suitable inverter is found
     }
   }
 
@@ -386,6 +390,25 @@ export const calculateResults = (
   // Calculate net savings
   const netSavings = 0; // Placeholder for actual net savings calculation
 
+  // Check if the required inverter size exceeds the maximum available
+  let systemSizeLimitNote = undefined;
+  const maxInverterSizeAvailable = inverterSpecs[inverterSpecs.length - 1].size;
+
+  if (inverterSize > maxInverterSizeAvailable) {
+      systemSizeLimitNote = 
+        `Note: Your calculated load requires a system size greater than ${maxInverterSizeAvailable} kVA, which is the maximum size currently supported by this tool. Systems larger than this require a custom design. Please contact us directly for a tailored solution for your needs.`;
+  }
+
+  // Check if paralleling might be required for very large systems
+  let parallelingNote = undefined;
+  const maxInverterSize = inverterSpecs[inverterSpecs.length - 1].size; // Assuming last is largest
+  const maxInverterCapacityWatts = maxInverterSize * 1000 * 0.8; // Convert kVA to estimated running watts (assuming 0.8 power factor)
+
+  if (inverterSize === maxInverterSize && adjustedPeakLoad > maxInverterCapacityWatts * 0.9) { // If we recommended the largest and load is close to/exceeding its capacity
+      parallelingNote = 
+        `Note: Your calculated load (${adjustedPeakLoad}W) requires a large inverter (${inverterSize} kVA). For systems of this size, especially if your load is close to or exceeds the inverter's continuous capacity, using multiple inverters in parallel is often recommended for better performance, redundancy, and scalability. Please contact us directly for a custom system design that may involve inverter paralleling.`;
+  }
+
   return {
     peakLoad,
     adjustedPeakLoad,
@@ -422,6 +445,8 @@ export const calculateResults = (
     netSavings,
     pvInputWarning,
     recommendedInverterSizeForPV,
+    parallelingNote,
+    systemSizeLimitNote,
   };
 };
 
