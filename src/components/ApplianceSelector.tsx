@@ -21,6 +21,12 @@ const ApplianceSelector: React.FC<ApplianceSelectorProps> = ({
     hoursPerDay: '4'
   });
 
+  // Combine default appliances with selected custom appliances for display
+  const allAppliancesToDisplay = [
+    ...appliances,
+    ...selectedAppliances.filter(app => app.id.startsWith('custom-') && !appliances.some(defaultApp => defaultApp.id === app.id))
+  ];
+
   // Check if an appliance is selected
   const isSelected = (applianceId: string): boolean => {
     return selectedAppliances.some(
@@ -34,7 +40,7 @@ const ApplianceSelector: React.FC<ApplianceSelectorProps> = ({
   };
 
   // Handle quantity change
-  const handleQuantityChange = (appliance: Appliance, newQuantity: number) => {
+  const handleQuantityChange = (appliance: Appliance | SelectedAppliance, newQuantity: number) => {
     const selected = getSelectedAppliance(appliance.id);
     
     // Ensure newQuantity is not negative
@@ -49,8 +55,8 @@ const ApplianceSelector: React.FC<ApplianceSelectorProps> = ({
       onApplianceChange({
         ...appliance,
         quantity: validQuantity,
-        hoursPerDay: appliance.defaultHours,
-      });
+        hoursPerDay: (appliance as any).defaultHours || (appliance as any).hoursPerDay,
+      } as SelectedAppliance);
     }
   };
 
@@ -77,8 +83,8 @@ const ApplianceSelector: React.FC<ApplianceSelectorProps> = ({
       id: `custom-${Date.now()}`,
       name: customAppliance.name,
       wattage: parseInt(customAppliance.wattage),
-      defaultQuantity: 1,
-      defaultHours: 4,
+      defaultQuantity: parseInt(customAppliance.quantity),
+      defaultHours: parseInt(customAppliance.hoursPerDay),
       quantity: parseInt(customAppliance.quantity),
       hoursPerDay: parseInt(customAppliance.hoursPerDay)
     };
@@ -113,10 +119,11 @@ const ApplianceSelector: React.FC<ApplianceSelectorProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 bg-white">
-              {appliances.map((appliance) => {
+              {allAppliancesToDisplay.map((appliance) => {
                 const selected = getSelectedAppliance(appliance.id);
                 const quantity = selected ? selected.quantity : 0;
-                const hours = selected ? selected.hoursPerDay : appliance.defaultHours;
+                // Use defaultHours from the original appliance if available, otherwise use hoursPerDay from selected
+                const hours = selected ? selected.hoursPerDay : (appliance as any).defaultHours;
                 const isActive = quantity > 0;
                 const dailyEnergy = appliance.wattage * quantity * hours;
 
@@ -182,6 +189,7 @@ const ApplianceSelector: React.FC<ApplianceSelectorProps> = ({
                           </button>
                         </div>
                       ) : (
+                        // For non-selected appliances, show default hours
                         <span className="text-gray-400">{appliance.defaultHours}</span>
                       )}
                     </td>
@@ -204,10 +212,11 @@ const ApplianceSelector: React.FC<ApplianceSelectorProps> = ({
 
       {/* Mobile Card View */}
       <div className="md:hidden space-y-4">
-        {appliances.map((appliance) => {
+        {allAppliancesToDisplay.map((appliance) => {
           const selected = getSelectedAppliance(appliance.id);
           const quantity = selected ? selected.quantity : 0;
-          const hours = selected ? selected.hoursPerDay : appliance.defaultHours;
+          // Use defaultHours from the original appliance if available, otherwise use hoursPerDay from selected
+          const hours = selected ? selected.hoursPerDay : (appliance as any).defaultHours;
           const isActive = quantity > 0;
           const dailyEnergy = appliance.wattage * quantity * hours;
 

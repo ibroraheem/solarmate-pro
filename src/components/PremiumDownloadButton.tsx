@@ -4,59 +4,49 @@ import { SystemResults } from '../types';
 import { generatePDF } from '../utils/pdfGenerator';
 
 interface PremiumDownloadButtonProps {
-  results: SystemResults;
-  selectedBatteryType: 'Tubular' | 'Lithium';
+  results: SystemResults | null;
   backupHours: number;
-  selectedState?: { name: string; psh: number };
+  selectedState: { name: string } | null;
 }
 
 const PremiumDownloadButton: React.FC<PremiumDownloadButtonProps> = ({
   results,
-  selectedBatteryType,
   backupHours,
-  selectedState
+  selectedState,
 }) => {
-  const [isLoading, setIsLoading] = useState(false);
-  const [email, setEmail] = useState('');
-  const [isPaid, setIsPaid] = useState(false);
+  const [isPaid, setIsPaid] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
 
   useEffect(() => {
-    loadPaystackScript().catch(console.error);
-    const paid = hasPaid();
-    setIsPaid(paid);
-    const savedEmail = localStorage.getItem('premium_user_email');
-    if (savedEmail) {
-      setEmail(atob(savedEmail));
+    const paymentTimestamp = localStorage.getItem('solarMateReportPaymentTimestamp');
+    if (paymentTimestamp) {
+      const timePaid = parseInt(paymentTimestamp, 10);
+      const tenMinutesInMillis = 10 * 60 * 1000;
+      if (Date.now() - timePaid < tenMinutesInMillis) {
+        setIsPaid(true);
+      } else {
+        localStorage.removeItem('solarMateReportPaymentTimestamp');
+      }
     }
   }, []);
 
   const handlePayment = async () => {
-    if (!email) {
-      alert('Please enter your email address');
-      return;
-    }
-
     setIsLoading(true);
-    try {
-      initializePaystack(email, () => {
-        setIsLoading(false);
-        setIsPaid(true);
-        // Generate PDF after successful payment
-        generatePDF(results, selectedBatteryType, backupHours, selectedState);
-      });
-    } catch (error) {
-      console.error('Payment failed:', error);
-      setIsLoading(false);
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    setIsPaid(true);
+    localStorage.setItem('solarMateReportPaymentTimestamp', Date.now().toString());
+    setIsLoading(false);
+  };
+
+  const handleDownload = () => {
+    if (results) {
+      generatePDF(results, results.batteryOptions.lithium.count > 0 ? 'Lithium' : 'Tubular', backupHours, selectedState);
     }
   };
 
-  const handleDownload = async () => {
-    if (!isPaid) {
-      handlePayment();
-      return;
-    }
-    generatePDF(results, selectedBatteryType, backupHours, selectedState);
-  };
+  if (!results) {
+    return null;
+  }
 
   return (
     <div className="flex flex-col items-center gap-4 p-6 bg-white rounded-lg shadow-md">
@@ -76,20 +66,22 @@ const PremiumDownloadButton: React.FC<PremiumDownloadButtonProps> = ({
           <li>Maintenance and warranty information</li>
         </ul>
       </div>
-      <input
-        type="email"
-        placeholder="Enter your email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        className="w-full px-4 py-2 mb-4 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-      />
-      <button
-        onClick={handleDownload}
-        disabled={isLoading}
-        className="w-full px-6 py-3 text-white bg-green-600 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        {isLoading ? 'Processing...' : isPaid ? 'Download Report' : 'Download Report (NGN 2,000)'}
-      </button>
+      {!isPaid ? (
+        <button
+          onClick={handlePayment}
+          disabled={isLoading}
+          className="w-full px-6 py-3 text-white bg-green-600 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isLoading ? 'Processing Payment...' : 'Pay NGN 2,000 to Download Report'}
+        </button>
+      ) : (
+        <button
+          onClick={handleDownload}
+          className="w-full px-6 py-3 text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+        >
+          Download Your Report
+        </button>
+      )}
       <p className="text-xs text-gray-500 text-center">
         Secure payment powered by Paystack
       </p>

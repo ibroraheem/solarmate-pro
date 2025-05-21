@@ -86,6 +86,19 @@ export interface SystemResults {
   priceDisclaimer: {
     factors: string[];
   };
+  generatorComparison: {
+    generator: PetrolGenerator;
+    estimatedAnnualCost: number;
+  } | null;
+  netSavings: number;
+}
+
+export interface PetrolGenerator {
+  capacitykVA: number;
+  brandModel: string;
+  priceRange: string;
+  fuelConsumptionLph: number;
+  fuelCost8Hrs: number;
 }
 
 export type Step = 'appliances' | 'summary' | 'results';

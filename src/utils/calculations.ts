@@ -8,6 +8,7 @@ import {
   DEFAULT_PSH 
 } from '../data/system';
 import { calculateSystemComponents } from './systemCalculations';
+import { petrolGenerators } from '../data/system';
 
 // State-specific PSH data from Zenevista (updated from user screenshots)
 const STATE_PSH_DATA: { [key: string]: number } = {
@@ -38,6 +39,34 @@ const STATE_PSH_DATA: { [key: string]: number } = {
   'Ogun': 5.6,
   'Ondo': 5.4,
   'Yobe': 7.2
+};
+
+const DAYS_IN_YEAR = 365;
+
+// Helper function to estimate generator running cost based on daily energy needed
+const calculateGeneratorRunningCost = (generator: typeof petrolGenerators[0], dailyEnergyWh: number): number => {
+  // Estimate the hours needed to generate dailyEnergyWh using the generator's capacity
+  // Assuming generator operates at roughly its rated capacity when running
+  const generatorHourlyOutputWh = generator.capacitykVA * 1000; // Convert kVA to VA, assume power factor 1 for simplicity initially
+  
+  // This is a simplification. A more accurate model would consider load variations and generator efficiency curves.
+  // Based on the provided data which includes 8-hour fuel cost, let's scale based on daily energy vs energy produced in 8 hours
+  const energyProducedIn8Hrs = generatorHourlyOutputWh * 8; // Simplified
+  
+  if (energyProducedIn8Hrs === 0) return 0; // Avoid division by zero
+
+  const scalingFactor = dailyEnergyWh / energyProducedIn8Hrs;
+  const estimatedDailyCost = generator.fuelCost8Hrs * scalingFactor;
+  
+  // Ensure minimum cost if daily energy is greater than 0, assuming a minimum run time cost.
+  // Let's apply a minimum cost equivalent to running for 1 hour at capacity if dailyEnergyWh > 0.
+  const minDailyCost = dailyEnergyWh > 0 ? (generator.fuelCost8Hrs / 8) : 0; // Cost for 1 hour
+  
+  const adjustedDailyCost = Math.max(estimatedDailyCost, minDailyCost);
+
+  // Calculate annual cost
+  const estimatedAnnualCost = adjustedDailyCost * DAYS_IN_YEAR;
+  return estimatedAnnualCost;
 };
 
 export const calculateResults = (
@@ -125,8 +154,12 @@ export const calculateResults = (
     const requiredCapacity = backupEnergy / 0.9;
     
     // Find the most cost-effective option
-    let bestOption = { 
-      model: null as typeof lithiumBatteries[0] | null, 
+    let bestOption: { 
+      model: typeof lithiumBatteries[0] | null; 
+      count: number; 
+      totalPrice: number 
+    } = { 
+      model: null, 
       count: Infinity, 
       totalPrice: Infinity 
     };
@@ -165,22 +198,8 @@ export const calculateResults = (
   }
 
   // Calculate solar panel requirement with state-specific PSH
-  // First calculate battery capacity in kWh
-  const batteryCapacity = systemVoltage === 24 || systemVoltage === 48
-    ? totalLithiumCapacity / 1000 // Convert Wh to kWh for lithium
-    : totalTubularCapacity / 1000; // Convert Wh to kWh for tubular
-
-  // Calculate required daily generation based on both backup energy and battery capacity
-  // We need enough solar to either meet daily energy needs OR fully charge the batteries, whichever is larger
-  const requiredDailyGeneration = Math.max(
-    backupEnergy / 1000, // Daily energy needs in kWh
-    batteryCapacity // Battery capacity in kWh
-  );
-
-  // Calculate minimum solar capacity needed considering PSH
+  const requiredDailyGeneration = backupEnergy / 1000; // Convert to kWh
   const requiredSolarCapacity = requiredDailyGeneration / psh;
-  
-  // Calculate number of panels needed
   const panelCount = Math.ceil(requiredSolarCapacity * 1000 / solarPanel.wattage);
   const panelTotalWattage = panelCount * solarPanel.wattage;
   const dailyOutput = (panelTotalWattage * psh) / 1000; // in kWh
@@ -216,7 +235,7 @@ export const calculateResults = (
     count: lithiumCount,
     totalCapacity: totalLithiumCapacity,
     totalPrice: totalLithiumPrice,
-    priceRange: calculatePriceRange(totalLithiumPrice)
+    priceRange: calculatePriceRange(totalLithiumPrice) // Use totalLithiumPrice
   };
 
   const tubularBatteryOption = {
@@ -228,7 +247,7 @@ export const calculateResults = (
     count: totalTubularCount,
     totalCapacity: totalTubularCapacity,
     totalPrice: totalTubularPrice,
-    priceRange: calculatePriceRange(totalTubularPrice)
+    priceRange: calculatePriceRange(totalTubularPrice) // Use totalTubularPrice
   };
 
   // Calculate system components
@@ -237,6 +256,42 @@ export const calculateResults = (
     inverterSize * 1000, // Convert kVA to watts
     systemVoltage
   );
+
+  // --- Generator Comparison Calculation ---
+  // Find a comparable petrol generator based on inverter size
+  // Find the generator with capacity closest to or just above the inverter size
+  // If multiple match inverter size, take the smallest kVA. If none match, take the largest available below inverter size.
+  const comparableGenerator = petrolGenerators.reduce((prev, curr) => {
+    // If current generator capacity is >= inverter size
+    if (curr.capacitykVA >= inverterSize) {
+      // If no previous generator found >= inverter size, or current is smaller than previous
+      if (!prev || (prev.capacitykVA < inverterSize || curr.capacitykVA < prev.capacitykVA)) {
+        return curr; // This is the best match so far >= inverter size
+      }
+    } else { // Current generator capacity is < inverter size
+      // If no previous generator found < inverter size, or current is larger than previous < inverter size
+      if (!prev || (prev.capacitykVA < inverterSize && curr.capacitykVA > prev.capacitykVA)){
+           return curr; // This is the largest match so far < inverter size
+       }
+    }
+     return prev; // Keep the previous best match
+  }, null as typeof petrolGenerators[0] | null);
+
+  let generatorComparisonData = null; // Use a different variable name
+  if (comparableGenerator) {
+      // Calculate annual running cost for the comparable generator based on daily energy consumption
+      const estimatedAnnualGeneratorCost = calculateGeneratorRunningCost(
+          comparableGenerator,
+          dailyEnergy // Use total daily energy consumption
+      );
+      generatorComparisonData = {
+          generator: comparableGenerator,
+          estimatedAnnualCost: estimatedAnnualGeneratorCost,
+      };
+  }
+
+  // Calculate net savings
+  const netSavings = 0; // Placeholder for actual net savings calculation
 
   return {
     peakLoad,
@@ -272,9 +327,12 @@ export const calculateResults = (
         'Installation complexity and location',
         'Additional components and accessories',
         'Transportation and logistics costs',
-        'Seasonal variations in component availability'
+        'Seasonal variations in component availability',
+        'Note: Generator fuel costs are estimates based on average petrol prices and typical consumption rates, which can fluctuate.'
       ]
-    }
+    },
+    generatorComparison: generatorComparisonData,
+    netSavings,
   };
 };
 
