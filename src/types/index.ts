@@ -91,6 +91,8 @@ export interface SystemResults {
     estimatedAnnualCost: number;
   } | null;
   netSavings: number;
+  pvInputWarning?: string;
+  recommendedInverterSizeForPV?: number;
 }
 
 export interface PetrolGenerator {
@@ -109,5 +111,5 @@ export interface SolarPanelResult {
   dailyOutput: number;
   modelName: string;
   price: number;
-  priceRange?: PriceRange;
+  priceRange: PriceRange;
 }

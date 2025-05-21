@@ -1,4 +1,4 @@
-import { SelectedAppliance, SystemResults, State } from '../types';
+import { SelectedAppliance, SystemResults, State, SolarPanelResult } from '../types';
 import { 
   inverterSpecs, 
   tubularBattery, 
@@ -69,6 +69,12 @@ const calculateGeneratorRunningCost = (generator: typeof petrolGenerators[0], da
   return estimatedAnnualCost;
 };
 
+const calculatePriceRange = (basePrice: number) => {
+  const lowerBound = Math.floor(basePrice * 0.85); // 15% lower
+  const upperBound = Math.ceil(basePrice * 1.15); // 15% higher
+  return { lowerBound, upperBound };
+};
+
 // Calculate required solar panels based on both daily energy needs and battery charging
 const calculateRequiredPanels = (
   dailyEnergyNeeded: number,
@@ -90,9 +96,10 @@ const calculateRequiredPanels = (
   // Calculate required panel wattage
   const requiredWattage = Math.ceil(energyWithBuffer / psh);
 
-  // Round up to nearest standard panel size (400W)
-  const panelCount = Math.ceil(requiredWattage / 400);
-  const totalWattage = panelCount * 400;
+  // Round up to nearest standard panel size (using constant)
+  const panelWattage = solarPanel.wattage;
+  const panelCount = Math.ceil(requiredWattage / panelWattage);
+  const totalWattage = panelCount * panelWattage;
 
   // Calculate daily output with the actual panel configuration
   const dailyOutput = (totalWattage * psh) / 1000; // Convert to kWh
@@ -101,15 +108,17 @@ const calculateRequiredPanels = (
     count: panelCount,
     totalWattage,
     dailyOutput,
-    modelName: '400W Monocrystalline',
-    price: panelCount * 45000 // NGN 45,000 per panel
+    modelName: `${panelWattage}W Monocrystalline`,
+    price: panelCount * solarPanel.price,
+    priceRange: calculatePriceRange(panelCount * solarPanel.price)
   };
 };
 
 export const calculateResults = (
   selectedAppliances: SelectedAppliance[],
   backupHours: number,
-  selectedState: State | null
+  selectedState: State | null,
+  preferredInverterSize?: number // Optional parameter for recalculation with a specific inverter
 ): SystemResults => {
   // Calculate peak load (all appliances that might run simultaneously)
   const peakLoad = selectedAppliances.reduce(
@@ -120,28 +129,60 @@ export const calculateResults = (
   // Add safety margin
   const adjustedPeakLoad = Math.ceil(peakLoad * SAFETY_MARGIN);
 
-  // Determine inverter size and system voltage
-  let inverterSize = 2;
-  let systemVoltage = 12;
+  // Determine inverter size and system voltage (use preferred size if provided, otherwise calculate based on load)
+  let inverterSize: number;
+  let systemVoltage: number;
 
-  if (adjustedPeakLoad <= 1600) {
-    inverterSize = 2;
-    systemVoltage = 12;
-  } else if (adjustedPeakLoad <= 3200) {
-    inverterSize = 3.6;
-    systemVoltage = 24;
-  } else if (adjustedPeakLoad <= 4000) {
-    inverterSize = 4.2;
-    systemVoltage = 24;
-  } else if (adjustedPeakLoad <= 5500) {
-    inverterSize = 6.2;
-    systemVoltage = 48;
-  } else if (adjustedPeakLoad <= 7500) {
-    inverterSize = 8.2;
-    systemVoltage = 48;
+  if (preferredInverterSize) {
+    // Use the preferred inverter size
+    const preferredSpec = inverterSpecs.find(spec => spec.size === preferredInverterSize);
+    if (preferredSpec) {
+      inverterSize = preferredSpec.size;
+      systemVoltage = preferredSpec.voltage;
+    } else {
+      // Fallback to load-based if preferred size is invalid/not found
+      console.warn(`Preferred inverter size ${preferredInverterSize} not found. Calculating based on load.`);
+      if (adjustedPeakLoad <= 1600) {
+        inverterSize = 2;
+        systemVoltage = 12;
+      } else if (adjustedPeakLoad <= 3200) {
+        inverterSize = 3.6;
+        systemVoltage = 24;
+      } else if (adjustedPeakLoad <= 4000) {
+        inverterSize = 4.2;
+        systemVoltage = 24;
+      } else if (adjustedPeakLoad <= 5500) {
+        inverterSize = 6.2;
+        systemVoltage = 48;
+      } else if (adjustedPeakLoad <= 7500) {
+        inverterSize = 8.2;
+        systemVoltage = 48;
+      } else {
+        inverterSize = 10.2;
+        systemVoltage = 48;
+      }
+    }
   } else {
-    inverterSize = 10.2;
-    systemVoltage = 48;
+    // Calculate inverter size based on adjusted peak load
+    if (adjustedPeakLoad <= 1600) {
+      inverterSize = 2;
+      systemVoltage = 12;
+    } else if (adjustedPeakLoad <= 3200) {
+      inverterSize = 3.6;
+      systemVoltage = 24;
+    } else if (adjustedPeakLoad <= 4000) {
+      inverterSize = 4.2;
+      systemVoltage = 24;
+    } else if (adjustedPeakLoad <= 5500) {
+      inverterSize = 6.2;
+      systemVoltage = 48;
+    } else if (adjustedPeakLoad <= 7500) {
+      inverterSize = 8.2;
+      systemVoltage = 48;
+    } else {
+      inverterSize = 10.2;
+      systemVoltage = 48;
+    }
   }
 
   // Calculate daily energy consumption
@@ -246,14 +287,30 @@ export const calculateResults = (
     spec => spec.size === inverterSize && spec.voltage === systemVoltage
   );
   const inverterPrice = selectedInverter ? selectedInverter.price : 0;
+  const maxPvInputWattage = selectedInverter?.maxPvInputWattage || 0;
+
+  // Check if solar panel wattage exceeds inverter's max PV input
+  let pvInputWarning = undefined;
+  let recommendedInverterSizeForPV = undefined;
+
+  if (selectedInverter && solarPanels.totalWattage > maxPvInputWattage) {
+    // Find a larger inverter that can handle the PV wattage
+    const largerInverter = inverterSpecs.find(
+      (spec) => spec.maxPvInputWattage >= solarPanels.totalWattage
+    );
+
+    if (largerInverter) {
+      pvInputWarning =
+        `Note: The recommended total solar panel wattage (${solarPanels.totalWattage}W) is calculated to meet your daily energy needs and battery charging. However, it exceeds the current ${selectedInverter.size} kVA inverter's estimated maximum PV input capacity (${maxPvInputWattage}W). This means the inverter can only utilize up to ${maxPvInputWattage}W from the solar array at any given time, leading to 'clipping' and reduced overall energy harvest.`;
+      recommendedInverterSizeForPV = largerInverter.size;
+    } else {
+      // Fallback message if no larger inverter is found in the data
+      pvInputWarning =
+        `Note: The recommended total solar panel wattage (${solarPanels.totalWattage}W) is calculated to meet your daily energy needs and battery charging. However, it exceeds the current ${selectedInverter.size} kVA inverter's estimated maximum PV input capacity (${maxPvInputWattage}W). This means the inverter can only utilize up to ${maxPvInputWattage}W from the solar array at any given time, leading to 'clipping' and reduced overall energy harvest. We do not have a larger inverter in our current data that can fully utilize this solar array.`;
+    }
+  }
 
   // Calculate total system price with ranges
-  const calculatePriceRange = (basePrice: number) => {
-    const lowerBound = Math.floor(basePrice * 0.85); // 15% lower
-    const upperBound = Math.ceil(basePrice * 1.15); // 15% higher
-    return { lowerBound, upperBound };
-  };
-
   const totalPriceWithTubular = inverterPrice + totalTubularPrice + solarPanels.price;
   const totalPriceWithLithium = inverterPrice + totalLithiumPrice + solarPanels.price;
 
@@ -363,6 +420,8 @@ export const calculateResults = (
     },
     generatorComparison: generatorComparisonData,
     netSavings,
+    pvInputWarning,
+    recommendedInverterSizeForPV,
   };
 };
 

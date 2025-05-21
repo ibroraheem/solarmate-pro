@@ -5,7 +5,7 @@ import ApplianceSelector from './components/ApplianceSelector';
 import BackupSettings from './components/BackupSettings';
 import SummaryCard from './components/SummaryCard';
 import SystemResults from './components/SystemResults';
-import { Appliance, SelectedAppliance, State, Step, SystemResults as SystemResultsType } from './types';
+import { SelectedAppliance, State, Step, SystemResults as SystemResultsType } from './types';
 import { appliances } from './data/appliances';
 import { nigerianStates } from './data/states';
 import { calculateResults } from './utils/calculations';
@@ -76,6 +76,18 @@ function App() {
     setActiveStep('results');
   };
 
+  // Handle recalculate with a specific inverter size
+  const handleRecalculateWithInverter = (inverterSize: number) => {
+    const systemResults = calculateResults(
+      selectedAppliances,
+      backupHours,
+      selectedState,
+      inverterSize // Pass the preferred inverter size
+    );
+    setResults(systemResults);
+    // Keep the active step as 'results'
+  };
+
   // Handle back to calculator
   const handleBack = () => {
     setActiveStep('appliances');
@@ -130,6 +142,8 @@ function App() {
               <SystemResults 
                 results={results} 
                 onBack={handleBack} 
+                backupHours={backupHours}
+                onRecalculateWithInverter={handleRecalculateWithInverter}
               />
             )}
           </div>

@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { initializePaystack, loadPaystackScript, hasPaid } from '../services/paystack';
+import { initializePaystack, loadPaystackScript } from '../services/paystack';
 import { SystemResults } from '../types';
 import { generatePDF } from '../utils/pdfGenerator';
 
 interface PremiumDownloadButtonProps {
   results: SystemResults | null;
   backupHours: number;
-  selectedState: { name: string } | null;
+  selectedState: { name: string; psh: number } | undefined;
 }
 
 const PremiumDownloadButton: React.FC<PremiumDownloadButtonProps> = ({
@@ -16,30 +16,52 @@ const PremiumDownloadButton: React.FC<PremiumDownloadButtonProps> = ({
 }) => {
   const [isPaid, setIsPaid] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [email, setEmail] = useState<string>('');
 
+  // Check payment status on component mount
   useEffect(() => {
-    const paymentTimestamp = localStorage.getItem('solarMateReportPaymentTimestamp');
-    if (paymentTimestamp) {
-      const timePaid = parseInt(paymentTimestamp, 10);
-      const tenMinutesInMillis = 10 * 60 * 1000;
-      if (Date.now() - timePaid < tenMinutesInMillis) {
-        setIsPaid(true);
+    const checkPaymentStatus = () => {
+      const paymentTimestamp = localStorage.getItem('solarMateReportPaymentTimestamp');
+      if (paymentTimestamp) {
+        const timePaid = parseInt(paymentTimestamp, 10);
+        const tenMinutesInMillis = 10 * 60 * 1000;
+        if (Date.now() - timePaid < tenMinutesInMillis) {
+          setIsPaid(true);
+        } else {
+          localStorage.removeItem('solarMateReportPaymentTimestamp');
+          setIsPaid(false);
+        }
       } else {
-        localStorage.removeItem('solarMateReportPaymentTimestamp');
+        setIsPaid(false);
       }
-    }
+    };
+
+    checkPaymentStatus();
   }, []);
 
   const handlePayment = async () => {
+    if (!email) {
+      alert('Please enter your email address to proceed with payment');
+      return;
+    }
+
     setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    setIsPaid(true);
-    localStorage.setItem('solarMateReportPaymentTimestamp', Date.now().toString());
-    setIsLoading(false);
+    try {
+      await loadPaystackScript();
+      initializePaystack(email, () => {
+        setIsPaid(true);
+        localStorage.setItem('solarMateReportPaymentTimestamp', Date.now().toString());
+        setIsLoading(false);
+      });
+    } catch (error) {
+      console.error('Payment initialization failed:', error);
+      setIsLoading(false);
+      setIsPaid(false);
+    }
   };
 
   const handleDownload = () => {
-    if (results) {
+    if (results && isPaid) {
       generatePDF(results, results.batteryOptions.lithium.count > 0 ? 'Lithium' : 'Tubular', backupHours, selectedState);
     }
   };
@@ -66,14 +88,31 @@ const PremiumDownloadButton: React.FC<PremiumDownloadButtonProps> = ({
           <li>Maintenance and warranty information</li>
         </ul>
       </div>
+
       {!isPaid ? (
-        <button
-          onClick={handlePayment}
-          disabled={isLoading}
-          className="w-full px-6 py-3 text-white bg-green-600 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isLoading ? 'Processing Payment...' : 'Pay NGN 2,000 to Download Report'}
-        </button>
+        <div className="w-full space-y-4">
+          <div className="w-full">
+            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+              Email Address
+            </label>
+            <input
+              type="email"
+              id="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Enter your email"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+              required
+            />
+          </div>
+          <button
+            onClick={handlePayment}
+            disabled={isLoading || !email}
+            className="w-full px-6 py-3 text-white bg-green-600 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isLoading ? 'Processing Payment...' : 'Pay NGN 2,000 to Download Report'}
+          </button>
+        </div>
       ) : (
         <button
           onClick={handleDownload}

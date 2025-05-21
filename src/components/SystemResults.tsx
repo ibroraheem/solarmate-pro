@@ -9,13 +9,15 @@ interface SystemResultsProps {
   onBack: () => void;
   backupHours: number;
   selectedState?: { name: string; psh: number };
+  onRecalculateWithInverter: (inverterSize: number) => void;
 }
 
 const SystemResults: React.FC<SystemResultsProps> = ({ 
   results, 
   onBack,
   backupHours,
-  selectedState
+  selectedState,
+  onRecalculateWithInverter
 }) => {
   const [selectedBatteryType, setSelectedBatteryType] = useState<'Tubular' | 'Lithium'>('Lithium');
   
@@ -102,6 +104,21 @@ const SystemResults: React.FC<SystemResultsProps> = ({
                 </div>
               </div>
             </div>
+            
+            {/* PV Input Warning */}
+            {results.pvInputWarning && (
+              <div className="mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-md">
+                <p className="text-sm font-medium">{results.pvInputWarning}</p>
+                {results.recommendedInverterSizeForPV && (
+                  <button
+                    onClick={() => onRecalculateWithInverter(results.recommendedInverterSizeForPV!)}
+                    className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm font-medium"
+                  >
+                    Recalculate with {results.recommendedInverterSizeForPV} kVA Inverter
+                  </button>
+                )}
+              </div>
+            )}
             
             {/* Battery Section */}
             <div className="mt-6">
@@ -214,7 +231,6 @@ const SystemResults: React.FC<SystemResultsProps> = ({
               <div className="w-full">
                 <PremiumDownloadButton 
                   results={results}
-                  selectedBatteryType={selectedBatteryType}
                   backupHours={backupHours}
                   selectedState={selectedState}
                 />
@@ -232,6 +248,13 @@ const SystemResults: React.FC<SystemResultsProps> = ({
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Development Note */}
+      <div className="mt-6 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+        <p className="text-sm text-yellow-800">
+          <span className="font-semibold">Development Note:</span> We are continuously working to enhance our solar system design tool. Future updates will include more advanced calculations, such as incorporating additional charge controllers for larger solar arrays, detailed wiring diagrams, and more nuanced financial analysis.
+        </p>
       </div>
     </div>
   );

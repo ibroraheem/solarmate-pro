@@ -43,25 +43,46 @@ export const generatePDF = (
 
   // Helper: Section header
   const addSectionHeader = (title: string) => {
-    doc.addPage();
-    yPos = margin;
+    // If current yPos is already at margin (start of a new page), just use it.
+    // Otherwise, add some space before the new section header if needed, or a new page if too close to the bottom.
+    if (yPos > margin) {
+      // Add a new page if remaining space is less than header height + minimum box margin
+      if (yPos + 16 + 8 > pageHeight - margin) { // 16 for header height, 8 for minimum box padding
+        doc.addPage();
+        yPos = margin;
+      } else {
+        yPos += 15; // Add space before the new section header if on the same page
+      }
+    }
+    // If yPos is at margin, it's already correct for a new page.
+
     doc.setFillColor(colors.primary);
     doc.roundedRect(margin, yPos, pageWidth - 2 * margin, 16, 4, 4, 'F');
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor('#fff');
     doc.text(title, pageWidth / 2, yPos + 11, { align: 'center' });
-    yPos += 22;
+    // yPos should now be set to the position where the box content can start immediately below the header
+    yPos += 16 + 6; // 16 for header height, 6 for space between header and box top
   };
 
-  // Helper: Content box
+  // Helper: Content box with better spacing
   const addBox = (lines: string[], title?: string) => {
     const boxWidth = pageWidth - 2 * margin;
-    const boxHeight = lines.length * lineHeight + (title ? 18 : 8);
-    if (yPos + boxHeight > pageHeight - margin) { doc.addPage(); yPos = margin; }
+    // Calculate the total height needed for the box including title and content lines
+    const requiredHeight = (title ? 18 : 8) + lines.length * lineHeight; // Estimate for content + internal padding
+    
+    // Check if the entire box fits from the current yPos. If not, add a new page.
+    if (yPos + requiredHeight > pageHeight - margin) {
+      doc.addPage();
+      yPos = margin; // Reset yPos for the new page
+    }
+
+    // Draw the box at the current yPos
     doc.setFillColor(colors.box);
-    doc.roundedRect(margin, yPos, boxWidth, boxHeight, 4, 4, 'F');
-    let y = yPos + 10;
+    doc.roundedRect(margin, yPos, boxWidth, requiredHeight + 8, 4, 4, 'F'); // Add 8 for bottom padding/margin
+    let y = yPos + (title ? 18 : 8); // Starting Y for text inside the box
+    
     if (title) {
       doc.setFontSize(12);
       doc.setFont('helvetica', 'bold');
@@ -69,13 +90,20 @@ export const generatePDF = (
       doc.text(title, margin + 6, y);
       y += lineHeight;
     }
+    
     doc.setFontSize(11);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(colors.text);
+    
     lines.forEach((line: string) => {
+      if (y + lineHeight > pageHeight - margin) {
+        doc.addPage();
+        y = margin + 10;
+      }
       y = addWrappedText(line, margin + 6, y, boxWidth - 12, 11, colors.text);
     });
-    yPos += boxHeight + 8;
+    
+    yPos = y + 8;
   };
 
   // Helper: Footer
@@ -98,27 +126,45 @@ export const generatePDF = (
   // --- COVER PAGE ---
   doc.setFillColor(colors.primary);
   doc.rect(0, 0, pageWidth, pageHeight, 'F');
-  doc.setFontSize(32);
+  
+  // Logo/Title
+  doc.setFontSize(36);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor('#fff');
-  doc.text('SOLARMATE', pageWidth / 2, 60, { align: 'center' });
-  doc.setFontSize(18);
-  doc.text('Comprehensive Solar System Sizing Report', pageWidth / 2, 80, { align: 'center' });
+  doc.text('SOLARMATE', pageWidth / 2, 80, { align: 'center' });
+  
+  // Subtitle
+  doc.setFontSize(24);
+  doc.text('Solar System Design Report', pageWidth / 2, 100, { align: 'center' });
+  
+  // Decorative line
+  doc.setDrawColor(colors.accent);
+  doc.setLineWidth(2);
+  doc.line(margin, 120, pageWidth - margin, 120);
+  
+  // Project Details
+  doc.setFontSize(14);
+  doc.text('Project Details:', pageWidth / 2, 140, { align: 'center' });
+  doc.setFontSize(12);
+  doc.text(`Location: ${selectedState?.name || 'Not specified'}`, pageWidth / 2, 155, { align: 'center' });
+  doc.text(`System Size: ${results.inverterSize} kVA`, pageWidth / 2, 165, { align: 'center' });
+  doc.text(`Backup Duration: ${backupHours} hours`, pageWidth / 2, 175, { align: 'center' });
+  
+  // Author Info
   doc.setFontSize(14);
   doc.setTextColor(colors.accent);
-  doc.text('Prepared for you by Ibrahim Abdulraheem', pageWidth / 2, 100, { align: 'center' });
+  doc.text('Prepared by:', pageWidth / 2, 200, { align: 'center' });
   doc.setFontSize(12);
-  doc.setTextColor('#fff');
-  doc.text('WhatsApp: +234 906 673 0744', pageWidth / 2, 110, { align: 'center' });
-  doc.text('Portfolio: ibroraheem.netlify.app', pageWidth / 2, 120, { align: 'center' });
-  doc.setDrawColor(colors.accent);
-  doc.setLineWidth(1.5);
-  doc.line(margin, 130, pageWidth - margin, 130);
+  doc.text('Ibrahim Abdulraheem', pageWidth / 2, 215, { align: 'center' });
+  doc.text('WhatsApp: +234 906 673 0744', pageWidth / 2, 225, { align: 'center' });
+  doc.text('Portfolio: ibroraheem.netlify.app', pageWidth / 2, 235, { align: 'center' });
+  
+  // Date
   doc.setFontSize(10);
   doc.setTextColor(colors.lightText);
-  doc.text('Generated on: ' + new Date().toLocaleDateString(), pageWidth / 2, 140, { align: 'center' });
-  doc.addPage();
-  yPos = margin;
+  doc.text('Generated on: ' + new Date().toLocaleDateString(), pageWidth / 2, 260, { align: 'center' });
+
+  doc.addPage(); // Start a new page after the cover
 
   // --- EXECUTIVE SUMMARY ---
   addSectionHeader('Executive Summary');
@@ -148,86 +194,176 @@ export const generatePDF = (
   addSectionHeader('Financial Analysis');
   const dailyGeneration = results.solarPanels.dailyOutput;
   const annualGeneration = dailyGeneration * 365;
-  const currentRate = 225; // NGN per kWh - This should ideally be dynamic/user input
+  const currentRate = 225; // NGN per kWh
   const annualSavings = annualGeneration * currentRate;
   const systemCost = results.totalPrice[selectedBatteryType === 'Tubular' ? 'withTubular' : 'withLithium'].base;
   const paybackPeriod = systemCost / annualSavings;
-  const batteryLife = selectedBatteryType === 'Tubular' ? 3 : 8; // years - These should ideally come from data/system.ts
+  const batteryLife = selectedBatteryType === 'Tubular' ? 3 : 8; // years
   const batteryReplacements = Math.ceil(25 / batteryLife) - 1;
   const batteryCost = results.batteryOptions[selectedBatteryType.toLowerCase() as 'tubular' | 'lithium'].totalPrice;
   const totalBatteryCost = batteryCost * batteryReplacements;
-  const maintenanceCost = systemCost * 0.05 * 25; // 5% of system cost annually for 25 years - This should ideally be configurable or more realistic
+  const maintenanceCost = systemCost * 0.05 * 25; // 5% of system cost annually for 25 years
   const total25YearCost = systemCost + totalBatteryCost + maintenanceCost;
   const total25YearSavings = annualSavings * 25;
   const netSavings = total25YearSavings - total25YearCost;
 
-  addBox([
-    'See the potential financial benefits of your solar system:',
+  // Financial Analysis Content
+  const financialContent = [
+    '1. Energy Generation and Savings',
     '',
     `• Expected Annual Energy Generation: ${annualGeneration.toFixed(2)} kWh`,
-    `• Based on the current electricity rate (approx. NGN ${currentRate}/kWh), this could save you about NGN ${annualSavings.toLocaleString()} per year.`,
+    `• Current Electricity Rate: NGN ${currentRate}/kWh`,
+    `• Estimated Annual Savings: NGN ${annualSavings.toLocaleString()}`,
     '',
-    `• Your estimated initial system cost is NGN ${systemCost.toLocaleString()}.`,
-    `• With potential annual savings, your system could pay for itself in approximately ${paybackPeriod.toFixed(1)} years.`,
+    '2. System Cost Analysis',
     '',
-    `• Over a 25-year lifespan, factoring in potential battery replacements and maintenance, the total estimated cost is NGN ${total25YearCost.toLocaleString()}.`,
-    `• Compared to grid electricity over 25 years (NGN ${total25YearSavings.toLocaleString()}), you could see net savings of around NGN ${netSavings.toLocaleString()}.`,
+    `• Initial System Cost: NGN ${systemCost.toLocaleString()}`,
+    `• Battery Replacement Cost (${batteryReplacements} times): NGN ${totalBatteryCost.toLocaleString()}`,
+    `• Maintenance Cost (25 years): NGN ${maintenanceCost.toLocaleString()}`,
+    `• Total 25-Year Cost: NGN ${total25YearCost.toLocaleString()}`,
     '',
-    'Beyond savings, enjoy energy independence, protection from rising electricity costs, and increased property value.'
-  ], 'Understanding Your Solar Investment');
+    '3. Return on Investment',
+    '',
+    `• Payback Period: ${paybackPeriod.toFixed(1)} years`,
+    `• 25-Year Grid Electricity Cost: NGN ${total25YearSavings.toLocaleString()}`,
+    `• Net Savings Over 25 Years: NGN ${netSavings.toLocaleString()}`,
+    '',
+    '4. Additional Benefits',
+    '',
+    '• Energy Independence',
+    '• Protection from Rising Electricity Costs',
+    '• Increased Property Value',
+    '• Reduced Carbon Footprint',
+    '• Minimal Maintenance Requirements'
+  ];
 
-  // --- GENERATOR COMPARISON ---
+  // Add Generator Comparison to Financial Analysis if available
   if (results.generatorComparison) {
-    addSectionHeader('Generator Comparison');
     const generator = results.generatorComparison.generator;
     const estimatedAnnualFuelCost = results.generatorComparison.estimatedAnnualCost;
-    const solarSystemCostAnnualized = results.totalPrice[selectedBatteryType === 'Tubular' ? 'withTubular' : 'withLithium'].base / 25; // Simple straight-line depreciation over 25 years
-
-    // Calculate generator lifespan in years based on 8 hours/day running
-    const generatorTotalHoursLifespan = 11000; // Average lifespan in running hours (10k-12k range)
+    const generatorTotalHoursLifespan = 11000; // Average lifespan in running hours
     const dailyRunningHours = 8; // Assuming 8 hours/day for comparison
     const generatorLifespanYears = generatorTotalHoursLifespan / (dailyRunningHours * 365);
 
-    addBox([
-      `To help you understand the long-term value of solar, here's a cost and reliability comparison with running a petrol generator and relying solely on the grid:`,
+    financialContent.push(
       '',
-      `• Comparable Petrol Generator: ${generator.brandModel} (${generator.capacitykVA} kVA)`,
-      `  - Estimated Annual Fuel Cost (assuming ${dailyRunningHours} hrs/day): NGN ${Math.ceil(estimatedAnnualFuelCost).toLocaleString()}`,
-      `  - Estimated Lifespan: Approximately ${generatorLifespanYears.toFixed(1)} years (based on ${dailyRunningHours} hrs/day or ${generatorTotalHoursLifespan.toLocaleString()} total running hours).`,
+      '5. Generator Comparison',
       '',
-      '**Generator Additional Costs & Considerations:**',
-      '•  Significant recurring expenses for fuel.',
-      '•  Regular maintenance, service, and repair costs.',
-      '•  Wear and tear reduces lifespan and efficiency over time.',
-      '•  Noise pollution and exhaust fumes.',
-      '•  Reliability can be inconsistent, especially with cheaper models.',
-      '•  Highly susceptible to volatile and rising fuel prices.',
+      `• Comparable Generator: ${generator.brandModel} (${generator.capacitykVA} kVA)`,
+      `• Initial Cost: NGN ${generator.priceRange.replace(/₦/g, '').trim()}`,
+      `• Annual Fuel Cost (${dailyRunningHours} hrs/day): NGN ${Math.ceil(estimatedAnnualFuelCost).toLocaleString()}`,
+      `• Estimated Lifespan: ${generatorLifespanYears.toFixed(1)} years`,
       '',
-      `• Grid Electricity Cost (Annual Estimate based on your consumption): NGN ${(results.solarPanels.dailyOutput * 365 * 225).toLocaleString()}`,
+      'Generator Additional Costs:',
+      '• Regular fuel expenses',
+      '• Maintenance and repairs',
+      '• Noise pollution',
+      '• Environmental impact',
+      '• Reliability concerns',
       '',
-      `• Your Recommended Solar System (${results.inverterSize} kVA):`,
-      `  - Estimated Annualized System Cost (over 25 years): NGN ${Math.ceil(solarSystemCostAnnualized).toLocaleString()}`,
-      `  - Estimated Annual Savings (vs Grid): NGN ${results.netSavings.toLocaleString()}`,
-      `  - Annual Energy Generation: ${(results.solarPanels.dailyOutput * 365).toLocaleString()} kWh`,
-      '',
-      '**Key Takeaway:** While requiring a higher initial investment, solar provides clean, reliable energy with predictable costs (mostly initial) and significant long-term savings, avoiding the recurring fuel expenses and maintenance burdens of generators, and offering independence from grid fluctuations.',
-      '',
-      '*Note: Generator fuel costs and grid electricity tariffs can fluctuate, impacting these cost comparisons. Solar performance can also vary based on weather and maintenance.*',
-    ], 'Cost, Reliability, and Lifespan Comparison');
+      'Solar Advantages:',
+      '• No fuel costs',
+      '• Minimal maintenance',
+      '• Silent operation',
+      '• Zero emissions',
+      '• Reliable performance'
+    );
   }
+
+  // Break down Financial Analysis into multiple boxes
+  // 1. Energy Generation and Savings
+  addBox([
+    `• Expected Annual Energy Generation: ${annualGeneration.toFixed(2)} kWh`,
+    `• Current Electricity Rate: NGN ${currentRate}/kWh`,
+    `• Estimated Annual Savings: NGN ${annualSavings.toLocaleString()}`,
+  ], 'Energy Generation and Savings');
+
+  // 2. System Cost Analysis
+  addBox([
+    `• Initial System Cost: NGN ${systemCost.toLocaleString()}`,
+    `• Battery Replacement Cost (${batteryReplacements} times): NGN ${totalBatteryCost.toLocaleString()}`,
+    `• Maintenance Cost (25 years): NGN ${maintenanceCost.toLocaleString()}`,
+    `• Total 25-Year Cost: NGN ${total25YearCost.toLocaleString()}`,
+  ], 'System Cost Analysis');
+
+  // 3. Return on Investment
+  addBox([
+    `• Payback Period: ${paybackPeriod.toFixed(1)} years`,
+    `• 25-Year Grid Electricity Cost: NGN ${total25YearSavings.toLocaleString()}`,
+    `• Net Savings Over 25 Years: NGN ${netSavings.toLocaleString()}`,
+  ], 'Return on Investment');
+
+  // 4. Additional Benefits
+  addBox([
+    '• Energy Independence',
+    '• Protection from Rising Electricity Costs',
+    '• Increased Property Value',
+    '• Reduced Carbon Footprint',
+    '• Minimal Maintenance Requirements'
+  ], 'Additional Benefits');
+
+  // 5. Generator Comparison (if available)
+  if (results.generatorComparison) {
+    const generator = results.generatorComparison.generator;
+    const estimatedAnnualFuelCost = results.generatorComparison.estimatedAnnualCost;
+    const generatorTotalHoursLifespan = 11000;
+    const dailyRunningHours = 8;
+    const generatorLifespanYears = generatorTotalHoursLifespan / (dailyRunningHours * 365);
+
+    addBox([
+      `• Comparable Generator: ${generator.brandModel} (${generator.capacitykVA} kVA)`,
+      `• Initial Cost: NGN ${generator.priceRange.replace(/₦/g, '').trim()}`,
+      `• Annual Fuel Cost (${dailyRunningHours} hrs/day): NGN ${Math.ceil(estimatedAnnualFuelCost).toLocaleString()}`,
+      `• Estimated Lifespan: ${generatorLifespanYears.toFixed(1)} years`,
+      '',
+      'Generator Additional Costs:',
+      '• Regular fuel expenses',
+      '• Maintenance and repairs',
+      '• Noise pollution',
+      '• Environmental impact',
+      '• Reliability concerns',
+      '',
+      'Solar Advantages:',
+      '• No fuel costs',
+      '• Minimal maintenance',
+      '• Silent operation',
+      '• Zero emissions',
+      '• Reliable performance'
+    ], 'Generator Comparison');
+  }
+
+  addBox(financialContent, 'Financial Analysis');
 
   // --- ENVIRONMENTAL IMPACT ---
   addSectionHeader('Environmental Impact');
-  const annualCO2Reduction = results.solarPanels.dailyOutput * 365 * 0.5; // 0.5 tons CO2 per MWh - Example conversion factor
-  const treesEquivalent = Math.ceil(annualCO2Reduction * 50); // 50 trees per ton of CO2 - Example conversion factor
+
+  // Calculate environmental metrics
+  const annualCO2Reduction = results.solarPanels.dailyOutput * 365 * 0.5; // 0.5 tons CO2 per MWh saved
+  const treesEquivalent = Math.ceil(annualCO2Reduction * 50); // 50 trees per ton of CO2
+
+  // Break down Environmental Impact into multiple boxes
+  // 1. Carbon Footprint Reduction
   addBox([
-    'Going solar reduces your carbon footprint and helps the environment.',
-    '',
-    `• Annually, your system could reduce CO₂ emissions by about ${annualCO2Reduction.toFixed(2)} tons.`,
-    `• This is like planting ${treesEquivalent} trees every year!`, // Corrected sentence structure
-    '',
-    'Choosing solar means clean energy, less air pollution, and supporting sustainable development.'
-  ]);
+    `• Annual CO₂ Reduction: ${annualCO2Reduction.toFixed(2)} tons`,
+    `• Equivalent to planting ${treesEquivalent} trees annually`,
+  ], 'Carbon Footprint Reduction');
+
+  // 2. Environmental Benefits
+  addBox([
+    '• Clean, renewable energy generation',
+    '• Zero harmful emissions during operation',
+    '• Reduced dependence on fossil fuels',
+    '• Contribution to sustainable development',
+    '• Support for climate change mitigation',
+  ], 'Environmental Benefits');
+
+  // 3. Long-term Impact
+  addBox([
+    '• Reduced carbon footprint over system lifetime',
+    '• Contribution to global sustainability goals',
+    '• Positive environmental legacy',
+    '• Support for clean energy transition',
+  ], 'Long-term Impact');
 
   // --- FOOTER ---
   addFooter();

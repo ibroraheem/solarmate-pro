@@ -2,12 +2,12 @@
 
 // Inverter specifications
 export const inverterSpecs = [
-  { size: 2, voltage: 12, price: 288000 },
-  { size: 3.6, voltage: 24, price: 396000 },
-  { size: 4.2, voltage: 24, price: 396000 },
-  { size: 6.2, voltage: 48, price: 456000 },
-  { size: 8.2, voltage: 48, price: 816000 },
-  { size: 10.2, voltage: 48, price: 840000 },
+  { size: 2, voltage: 12, price: 288000, maxPvInputWattage: 2000 },
+  { size: 3.6, voltage: 24, price: 396000, maxPvInputWattage: 4000 },
+  { size: 4.2, voltage: 24, price: 396000, maxPvInputWattage: 4500 },
+  { size: 6.2, voltage: 48, price: 456000, maxPvInputWattage: 6500 },
+  { size: 8.2, voltage: 48, price: 816000, maxPvInputWattage: 9000 },
+  { size: 10.2, voltage: 48, price: 840000, maxPvInputWattage: 11000 },
 ];
 
 // Battery specifications
