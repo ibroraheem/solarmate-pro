@@ -7,14 +7,18 @@
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
-
-  gtag('config', 'G-4M6K25GPHF');
+      gtag('config', 'G-4M6K25GPHF', {
+        'send_page_view': false,
+        'transport_url': 'https://www.google-analytics.com'
+      });
 </script>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SolarMate - Solar System Calculator</title>
     <meta name="description" content="Professional solar system sizing calculator for Nigerian homes and businesses.">
+    <!-- Paystack -->
+    <script src="https://js.paystack.co/v1/inline.js"></script>
   </head>
   <body>
     <div id="root"></div>

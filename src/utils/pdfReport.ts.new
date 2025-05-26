@@ -1,0 +1,113 @@
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { SystemResults } from '../types';
+import { calculateSystemComponents } from './systemComponents';
+
+interface CustomerInfo {
+  customerName: string;
+  customerEmail: string;
+  customerPhone: string;
+  installationAddress: string;
+}
+
+export const generatePDFReport = async (
+  results: SystemResults,
+  customerInfo: CustomerInfo
+): Promise<Blob> => {
+  const doc = new jsPDF();
+  
+  // Add title
+  doc.setFontSize(20);
+  doc.text('Solar System Design Report', 105, 20, { align: 'center' });
+  
+  // Add customer information
+  doc.setFontSize(12);
+  doc.text('Customer Information', 20, 40);
+  doc.setFontSize(10);
+  doc.text(`Name: ${customerInfo.customerName}`, 20, 50);
+  doc.text(`Email: ${customerInfo.customerEmail}`, 20, 55);
+  doc.text(`Phone: ${customerInfo.customerPhone}`, 20, 60);
+  doc.text(`Installation Address: ${customerInfo.installationAddress}`, 20, 65);
+
+  // Add system overview
+  doc.setFontSize(12);
+  doc.text('System Overview', 20, 80);
+  doc.setFontSize(10);
+  doc.text(`Peak Load: ${(results.peakLoad / 1000).toFixed(1)}kW`, 20, 90);
+  doc.text(`Daily Consumption: ${(results.dailyConsumption / 1000).toFixed(1)}kWh`, 20, 95);
+  doc.text(`Backup Hours: ${results.backupHours} hours`, 20, 100);
+  doc.text(`Electricity Band: ${results.electricityBand}`, 20, 105);
+
+  // Add component specifications
+  doc.setFontSize(12);
+  doc.text('Component Specifications', 20, 120);
+  
+  // Solar Panels
+  doc.setFontSize(10);
+  doc.text('Solar Panels:', 20, 130);
+  doc.text(`• ${results.solarPanels.count}x ${results.solarPanels.capacity}W panels`, 25, 135);
+  doc.text(`• Total Capacity: ${results.solarPanels.totalCapacity}kWp`, 25, 140);
+  doc.text(`• Daily Production: ${results.solarPanels.dailyProduction.toFixed(1)}kWh`, 25, 145);
+
+  // Batteries
+  doc.text('Batteries:', 20, 155);
+  doc.text(`• ${results.batteries.count}x ${results.batteries.type} batteries`, 25, 160);
+  doc.text(`• Capacity: ${results.batteries.capacity}kWh per battery`, 25, 165);
+  doc.text(`• System Voltage: ${results.batteries.voltage}V`, 25, 170);
+
+  // Inverter
+  doc.text('Inverter:', 20, 180);
+  doc.text(`• ${results.inverter.size}kVA ${results.inverter.type}`, 25, 185);
+  doc.text(`• System Voltage: ${results.inverter.voltage}V`, 25, 190);
+
+  // Charge Controller
+  if (results.chargeController) {
+    doc.text('Charge Controller:', 20, 200);
+    doc.text(`• Type: ${results.chargeController.type}`, 25, 205);
+    doc.text(`• Current Rating: ${results.chargeController.current}A`, 25, 210);
+    doc.text(`• System Voltage: ${results.chargeController.voltage}V`, 25, 215);
+  }
+
+  // Add bill of materials
+  doc.addPage();
+  doc.setFontSize(12);
+  doc.text('Bill of Materials', 20, 20);
+
+  const components = calculateSystemComponents(results);
+  const tableData = components.map(comp => [
+    comp.name,
+    comp.quantity.toString(),
+    comp.specifications
+  ]);
+
+  autoTable(doc, {
+    startY: 30,
+    head: [['Component', 'Quantity', 'Specifications']],
+    body: tableData,
+    theme: 'grid',
+    styles: { fontSize: 8 },
+    headStyles: { fillColor: [41, 128, 185] }
+  });
+
+  // Add recommendations
+  doc.addPage();
+  doc.setFontSize(12);
+  doc.text('System Recommendations', 20, 20);
+  doc.setFontSize(10);
+  doc.text('1. Regular Maintenance:', 20, 30);
+  doc.text('• Clean solar panels monthly', 25, 35);
+  doc.text('• Check battery terminals quarterly', 25, 40);
+  doc.text('• Inspect cable connections regularly', 25, 45);
+
+  doc.text('2. Safety Guidelines:', 20, 60);
+  doc.text('• Keep system components dry', 25, 65);
+  doc.text('• Ensure proper ventilation', 25, 70);
+  doc.text('• Follow manufacturer guidelines', 25, 75);
+
+  doc.text('3. Performance Optimization:', 20, 90);
+  doc.text('• Monitor system performance', 25, 95);
+  doc.text('• Check battery charge levels', 25, 100);
+  doc.text('• Maintain optimal panel angle', 25, 105);
+
+  return doc.output('blob');
+}; 

@@ -1,4 +1,4 @@
-import { SelectedAppliance, SystemResults, State, SolarPanelResult } from '../types';
+import { ApplianceUsage, SystemResults, State, SystemPreferences } from '../types';
 import { 
   inverterSpecs, 
   tubularBattery, 
@@ -7,8 +7,6 @@ import {
   SAFETY_MARGIN, 
   DEFAULT_PSH 
 } from '../data/system';
-import { calculateSystemComponents } from './systemCalculations';
-import { petrolGenerators } from '../data/system';
 
 // State-specific PSH data from Zenevista (updated from user screenshots)
 const STATE_PSH_DATA: { [key: string]: number } = {
@@ -75,128 +73,78 @@ const calculatePriceRange = (basePrice: number) => {
   return { lowerBound, upperBound };
 };
 
-// Calculate required solar panels based on both daily energy needs and battery charging
-const calculateRequiredPanels = (
-  dailyEnergyNeeded: number,
-  batteryCapacity: number,
+function calculateRequiredPanels(
+  dailyEnergy: number,
+  backupEnergy: number,
   psh: number
-): SolarPanelResult => {
-  // Calculate energy needed for daily consumption
-  const dailyConsumptionEnergy = dailyEnergyNeeded;
-
-  // Calculate energy needed to charge batteries (80% depth of discharge)
-  const batteryChargingEnergy = (batteryCapacity * 0.8) / 0.9; // 0.9 is charging efficiency
-
-  // Total daily energy requirement
-  const totalDailyEnergyNeeded = dailyConsumptionEnergy + batteryChargingEnergy;
-
-  // Add 20% buffer for system losses and future expansion
-  const energyWithBuffer = totalDailyEnergyNeeded * 1.2;
-
-  // Calculate required panel wattage
-  const requiredWattage = Math.ceil(energyWithBuffer / psh);
-
-  // Round up to nearest standard panel size (using constant)
-  const panelWattage = solarPanel.wattage;
-  const panelCount = Math.ceil(requiredWattage / panelWattage);
-  const totalWattage = panelCount * panelWattage;
-
-  // Calculate daily output with the actual panel configuration
-  const dailyOutput = (totalWattage * psh) / 1000; // Convert to kWh
-
+): {
+  count: number;
+  wattage: number;
+  totalWattage: number;
+  dailyOutput: number;
+} {
+  const requiredDailyOutput = Math.max(dailyEnergy, backupEnergy) * 1.2; // Add 20% for system losses
+  const panelDailyOutput = solarPanel.wattage * psh;
+  const count = Math.ceil(requiredDailyOutput / panelDailyOutput);
+  
   return {
-    count: panelCount,
-    totalWattage,
-    dailyOutput,
-    modelName: `${panelWattage}W Monocrystalline`,
-    price: panelCount * solarPanel.price,
-    priceRange: calculatePriceRange(panelCount * solarPanel.price)
+    count,
+    wattage: solarPanel.wattage,
+    totalWattage: count * solarPanel.wattage,
+    dailyOutput: count * panelDailyOutput
   };
-};
+}
 
-export const calculateResults = (
-  selectedAppliances: SelectedAppliance[],
-  backupHours: number,
-  selectedState: State | null,
-  preferredInverterSize?: number // Optional parameter for recalculation with a specific inverter
-): SystemResults => {
+export function calculateResults(
+  appliances: ApplianceUsage[],
+  preferences: SystemPreferences,
+  state: State | null
+): SystemResults {
   // Calculate peak load (all appliances that might run simultaneously)
-  const peakLoad = selectedAppliances.reduce(
-    (total, appliance) => total + appliance.wattage * appliance.quantity,
+  const peakLoad = appliances.reduce(
+    (total, appliance) => total + appliance.power * appliance.quantity,
     0
   );
 
   // Add safety margin
   const adjustedPeakLoad = Math.ceil(peakLoad * SAFETY_MARGIN);
 
-  // Determine inverter size and system voltage (use preferred size if provided, otherwise calculate based on load)
+  // Determine inverter size and system voltage
   let inverterSize: number;
   let systemVoltage: number;
 
-  if (preferredInverterSize) {
-    // Use the preferred inverter size
-    const preferredSpec = inverterSpecs.find(spec => spec.size === preferredInverterSize);
-    if (preferredSpec) {
-      inverterSize = preferredSpec.size;
-      systemVoltage = preferredSpec.voltage;
-    } else {
-      // Fallback to load-based if preferred size is invalid/not found
-      console.warn(`Preferred inverter size ${preferredInverterSize} not found. Calculating based on load.`);
-      if (adjustedPeakLoad <= 1600) {
-        inverterSize = 2;
-        systemVoltage = 12;
-      } else if (adjustedPeakLoad <= 3200) {
-        inverterSize = 3.6;
-        systemVoltage = 24;
-      } else if (adjustedPeakLoad <= 4000) {
-        inverterSize = 4.2;
-        systemVoltage = 24;
-      } else if (adjustedPeakLoad <= 5500) {
-        inverterSize = 6.2;
-        systemVoltage = 48;
-      } else if (adjustedPeakLoad <= 7500) {
-        inverterSize = 8.2;
-        systemVoltage = 48;
-      } else {
-        inverterSize = 10.2;
-        systemVoltage = 48;
-      }
-    }
+  if (adjustedPeakLoad <= 1600) {
+    inverterSize = 2;
+    systemVoltage = 12;
+  } else if (adjustedPeakLoad <= 3200) {
+    inverterSize = 3.6;
+    systemVoltage = 24;
+  } else if (adjustedPeakLoad <= 4000) {
+    inverterSize = 4.2;
+    systemVoltage = 24;
+  } else if (adjustedPeakLoad <= 5500) {
+    inverterSize = 6.2;
+    systemVoltage = 48;
+  } else if (adjustedPeakLoad <= 7500) {
+    inverterSize = 8.2;
+    systemVoltage = 48;
   } else {
-    // Calculate inverter size based on adjusted peak load
-    if (adjustedPeakLoad <= 1600) {
-      inverterSize = 2;
-      systemVoltage = 12;
-    } else if (adjustedPeakLoad <= 3200) {
-      inverterSize = 3.6;
-      systemVoltage = 24;
-    } else if (adjustedPeakLoad <= 4000) {
-      inverterSize = 4.2;
-      systemVoltage = 24;
-    } else if (adjustedPeakLoad <= 5500) {
-      inverterSize = 6.2;
-      systemVoltage = 48;
-    } else if (adjustedPeakLoad <= 7500) {
-      inverterSize = 8.2;
-      systemVoltage = 48;
-    } else {
-      inverterSize = 10.2;
-      systemVoltage = 48;
-    }
+    inverterSize = 10.2;
+    systemVoltage = 48;
   }
 
   // Calculate daily energy consumption
-  const dailyEnergy = selectedAppliances.reduce(
+  const dailyEnergy = appliances.reduce(
     (total, appliance) => 
-      total + (appliance.wattage * appliance.quantity * appliance.hoursPerDay),
+      total + (appliance.power * appliance.quantity * appliance.hoursPerDay),
     0
   );
 
   // Calculate backup energy
-  const backupEnergy = dailyEnergy * (backupHours / 24);
+  const backupEnergy = dailyEnergy * (preferences.backupHours / 24);
 
   // Get state-specific PSH or use default
-  const psh = selectedState ? STATE_PSH_DATA[selectedState.name] || DEFAULT_PSH : DEFAULT_PSH;
+  const psh = state ? STATE_PSH_DATA[state.name] || DEFAULT_PSH : DEFAULT_PSH;
 
   // Calculate battery bank capacity for tubular battery
   const tubularBankAh = backupEnergy / (systemVoltage * tubularBattery.depthOfDischarge);
@@ -207,7 +155,6 @@ export const calculateResults = (
   const totalTubularPrice = totalTubularCount * tubularBattery.price;
 
   // Calculate battery bank for lithium
-  // Find suitable lithium battery model
   let selectedLithium;
   let lithiumCount = 0;
   let totalLithiumCapacity = 0;
@@ -262,17 +209,6 @@ export const calculateResults = (
       totalLithiumCapacity = selectedLithium.voltage * selectedLithium.ampHours * lithiumCount;
       totalLithiumPrice = bestOption.totalPrice;
     }
-  } else {
-    // 12V systems (using 24V lithium in parallel if needed, though not ideal)
-    const lithium24V = lithiumBatteries.find(b => b.voltage === 24);
-    
-    if (lithium24V) {
-      const requiredCapacity = backupEnergy / 0.9;
-      lithiumCount = Math.ceil(requiredCapacity / (lithium24V.voltage * lithium24V.ampHours));
-      selectedLithium = lithium24V;
-      totalLithiumCapacity = lithium24V.voltage * lithium24V.ampHours * lithiumCount;
-      totalLithiumPrice = lithium24V.price * lithiumCount;
-    }
   }
 
   // Calculate required solar panels
@@ -286,12 +222,10 @@ export const calculateResults = (
   const selectedInverter = inverterSpecs.find(
     spec => spec.size === inverterSize && spec.voltage === systemVoltage
   );
-  const inverterPrice = selectedInverter ? selectedInverter.price : 0;
   const maxPvInputWattage = selectedInverter?.maxPvInputWattage || 0;
 
   // Check if solar panel wattage exceeds inverter's max PV input
   let pvInputWarning = undefined;
-  let recommendedInverterSizeForPV = undefined;
 
   if (selectedInverter && solarPanels.totalWattage > maxPvInputWattage) {
     // Find a larger inverter that can handle the PV wattage
@@ -306,149 +240,46 @@ export const calculateResults = (
     if (largerInverter) {
       // If a suitable larger inverter exists in our data, recommend it and mention extra controller
       pvInputWarning += ` To fully utilize the ${solarPanels.totalWattage}W solar array, we recommend using a larger inverter, such as the ${largerInverter.size} kVA model, which has an estimated maximum PV input capacity of ${largerInverter.maxPvInputWattage}W. An alternative solution involves using an extra charge controller for the excess panels; please contact us directly for calculations and details on this approach.`;
-      recommendedInverterSizeForPV = largerInverter.size; // Set recommended size for recalculation button
     } else {
       // If no suitable larger inverter exists in our data, ask user to contact for custom solution
       pvInputWarning += ` Utilizing this solar array requires a larger inverter than available in this tool's current data. Please contact us directly for a custom solution.`;
-      recommendedInverterSizeForPV = undefined; // Ensure recommended size is not set if no suitable inverter is found
     }
-  }
-
-  // Calculate total system price with ranges
-  const totalPriceWithTubular = inverterPrice + totalTubularPrice + solarPanels.price;
-  const totalPriceWithLithium = inverterPrice + totalLithiumPrice + solarPanels.price;
-
-  const tubularPriceRange = calculatePriceRange(totalPriceWithTubular);
-  const lithiumPriceRange = calculatePriceRange(totalPriceWithLithium);
-
-  const lithiumBatteryOption = {
-    type: 'Lithium' as const,
-    modelName: selectedLithium ? 
-      `${selectedLithium.capacity}kWh ${selectedLithium.voltage}V Lithium` : 
-      'Not available',
-    voltage: selectedLithium ? selectedLithium.voltage : 0,
-    capacity: selectedLithium ? selectedLithium.ampHours : 0,
-    price: selectedLithium ? selectedLithium.price : 0,
-    count: lithiumCount,
-    totalCapacity: totalLithiumCapacity,
-    totalPrice: totalLithiumPrice,
-    priceRange: calculatePriceRange(totalLithiumPrice) // Use totalLithiumPrice
-  };
-
-  const tubularBatteryOption = {
-    type: 'Tubular' as const,
-    modelName: `${tubularBattery.voltage}V ${tubularBattery.capacity}Ah Tubular`,
-    voltage: tubularBattery.voltage,
-    capacity: tubularBattery.capacity,
-    price: tubularBattery.price,
-    count: totalTubularCount,
-    totalCapacity: totalTubularCapacity,
-    totalPrice: totalTubularPrice,
-    priceRange: calculatePriceRange(totalTubularPrice) // Use totalTubularPrice
-  };
-
-  // Calculate system components
-  const components = calculateSystemComponents(
-    adjustedPeakLoad,
-    inverterSize * 1000, // Convert kVA to watts
-    systemVoltage
-  );
-
-  // --- Generator Comparison Calculation ---
-  // Find a comparable petrol generator based on inverter size
-  // Find the generator with capacity closest to or just above the inverter size
-  // If multiple match inverter size, take the smallest kVA. If none match, take the largest available below inverter size.
-  const comparableGenerator = petrolGenerators.reduce((prev, curr) => {
-    // If current generator capacity is >= inverter size
-    if (curr.capacitykVA >= inverterSize) {
-      // If no previous generator found >= inverter size, or current is smaller than previous
-      if (!prev || (prev.capacitykVA < inverterSize || curr.capacitykVA < prev.capacitykVA)) {
-        return curr; // This is the best match so far >= inverter size
-      }
-    } else { // Current generator capacity is < inverter size
-      // If no previous generator found < inverter size, or current is larger than previous < inverter size
-      if (!prev || (prev.capacitykVA < inverterSize && curr.capacitykVA > prev.capacitykVA)){
-           return curr; // This is the largest match so far < inverter size
-       }
-    }
-     return prev; // Keep the previous best match
-  }, null as typeof petrolGenerators[0] | null);
-
-  let generatorComparisonData = null; // Use a different variable name
-  if (comparableGenerator) {
-      // Calculate annual running cost for the comparable generator based on daily energy consumption
-      const estimatedAnnualGeneratorCost = calculateGeneratorRunningCost(
-          comparableGenerator,
-          dailyEnergy // Use total daily energy consumption
-      );
-      generatorComparisonData = {
-          generator: comparableGenerator,
-          estimatedAnnualCost: estimatedAnnualGeneratorCost,
-      };
   }
 
   // Calculate net savings
   const netSavings = 0; // Placeholder for actual net savings calculation
 
-  // Check if the required inverter size exceeds the maximum available
-  let systemSizeLimitNote = undefined;
-  const maxInverterSizeAvailable = inverterSpecs[inverterSpecs.length - 1].size;
-
-  if (inverterSize > maxInverterSizeAvailable) {
-      systemSizeLimitNote = 
-        `Note: Your calculated load requires a system size greater than ${maxInverterSizeAvailable} kVA, which is the maximum size currently supported by this tool. Systems larger than this require a custom design. Please contact us directly for a tailored solution for your needs.`;
-  }
-
-  // Check if paralleling might be required for very large systems
-  let parallelingNote = undefined;
-  const maxInverterSize = inverterSpecs[inverterSpecs.length - 1].size; // Assuming last is largest
-  const maxInverterCapacityWatts = maxInverterSize * 1000 * 0.8; // Convert kVA to estimated running watts (assuming 0.8 power factor)
-
-  if (inverterSize === maxInverterSize && adjustedPeakLoad > maxInverterCapacityWatts * 0.9) { // If we recommended the largest and load is close to/exceeding its capacity
-      parallelingNote = 
-        `Note: Your calculated load (${adjustedPeakLoad}W) requires a large inverter (${inverterSize} kVA). For systems of this size, especially if your load is close to or exceeds the inverter's continuous capacity, using multiple inverters in parallel is often recommended for better performance, redundancy, and scalability. Please contact us directly for a custom system design that may involve inverter paralleling.`;
-  }
-
   return {
     peakLoad,
     adjustedPeakLoad,
-    inverterSize,
-    systemVoltage,
-    backupEnergy,
-    batteryOptions: {
-      tubular: tubularBatteryOption,
-      lithium: lithiumBatteryOption
+    dailyConsumption: dailyEnergy,
+    inverter: {
+      name: selectedInverter ? `${selectedInverter.size}kVA ${selectedInverter.voltage}V` : 'Not available',
+      pvInputWarning
     },
-    solarPanels,
-    totalPrice: {
-      withTubular: {
-        base: totalPriceWithTubular,
-        range: tubularPriceRange
+    solarPanels: {
+      count: solarPanels.count,
+      wattage: solarPanels.wattage,
+      totalWattage: solarPanels.totalWattage,
+      dailyOutput: solarPanels.dailyOutput
+    },
+    batteries: {
+      tubular: {
+        count: totalTubularCount,
+        totalCapacity: totalTubularCapacity
       },
-      withLithium: {
-        base: totalPriceWithLithium,
-        range: lithiumPriceRange
+      lithium: {
+        count: lithiumCount,
+        totalCapacity: totalLithiumCapacity
       }
     },
-    components,
-    priceDisclaimer: {
-      factors: [
-        'Market conditions and exchange rates',
-        'Installation complexity and location',
-        'Additional components and accessories',
-        'Transportation and logistics costs',
-        'Seasonal variations in component availability',
-        'Note: Generator fuel costs are estimates based on average petrol prices and typical consumption rates, which can fluctuate.'
-      ]
+    costAnalysis: {
+      tubularPrice: totalTubularPrice,
+      lithiumPrice: totalLithiumPrice
     },
-    generatorComparison: generatorComparisonData,
-    netSavings,
-    pvInputWarning,
-    recommendedInverterSizeForPV,
-    parallelingNote,
-    systemSizeLimitNote,
+    netSavings
   };
-};
+}
 
 export const formatCurrency = (amount: number): string => {
   return new Intl.NumberFormat('en-NG', {

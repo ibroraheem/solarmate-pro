@@ -1,18 +1,19 @@
 import React, { useState } from 'react';
-import { Appliance, SelectedAppliance } from '../types';
+import { Appliance, ApplianceUsage, TimeSlot } from '../types';
 import { MinusCircleIcon, PlusCircleIcon, PlusIcon } from 'lucide-react';
+import { TimeSlotInput } from './TimeSlotInput';
 
 interface ApplianceSelectorProps {
   appliances: Appliance[];
-  selectedAppliances: SelectedAppliance[];
-  onApplianceChange: (updatedAppliance: SelectedAppliance) => void;
+  selectedAppliances: ApplianceUsage[];
+  onApplianceChange: (appliance: ApplianceUsage) => void;
 }
 
-const ApplianceSelector: React.FC<ApplianceSelectorProps> = ({
+export default function ApplianceSelector({
   appliances,
   selectedAppliances,
-  onApplianceChange,
-}) => {
+  onApplianceChange
+}: ApplianceSelectorProps) {
   const [showCustomForm, setShowCustomForm] = useState(false);
   const [customAppliance, setCustomAppliance] = useState({
     name: '',
@@ -20,6 +21,21 @@ const ApplianceSelector: React.FC<ApplianceSelectorProps> = ({
     quantity: '1',
     hoursPerDay: '4'
   });
+
+  // Set default time slots based on hours per day
+  const getDefaultTimeSlots = (hoursPerDay: number): TimeSlot[] => {
+    if (hoursPerDay <= 0) return [];
+    
+    // Default to daytime usage (8 AM to 8 PM)
+    const startHour = 8;
+    const endHour = Math.min(20, startHour + hoursPerDay);
+    
+    return [{
+      start: `${startHour}:00`,
+      end: `${endHour}:00`,
+      isDaytime: true
+    }];
+  };
 
   // Combine default appliances with selected custom appliances for display
   const allAppliancesToDisplay = [
@@ -35,43 +51,63 @@ const ApplianceSelector: React.FC<ApplianceSelectorProps> = ({
   };
 
   // Get selected appliance by ID
-  const getSelectedAppliance = (applianceId: string): SelectedAppliance | undefined => {
+  const getSelectedAppliance = (applianceId: string): ApplianceUsage | undefined => {
     return selectedAppliances.find((selected) => selected.id === applianceId);
   };
 
   // Handle quantity change
-  const handleQuantityChange = (appliance: Appliance | SelectedAppliance, newQuantity: number) => {
-    const selected = getSelectedAppliance(appliance.id);
-    
-    // Ensure newQuantity is not negative
-    const validQuantity = Math.max(0, newQuantity);
-    
-    if (selected) {
-      onApplianceChange({
-        ...selected,
-        quantity: validQuantity,
-      });
-    } else {
-      onApplianceChange({
-        ...appliance,
-        quantity: validQuantity,
-        hoursPerDay: (appliance as any).defaultHours || (appliance as any).hoursPerDay,
-      } as SelectedAppliance);
-    }
+  const handleQuantityChange = (appliance: ApplianceUsage, quantity: number) => {
+    const updatedAppliance = {
+      ...appliance,
+      quantity,
+      timeSlots: quantity > 0 ? appliance.timeSlots : []
+    };
+    onApplianceChange(updatedAppliance);
   };
 
   // Handle hours change
-  const handleHoursChange = (applianceId: string, hours: number) => {
-    const selected = getSelectedAppliance(applianceId);
-    
-    // Ensure hours is between 1 and 24
-    const validHours = Math.min(24, Math.max(1, hours));
-    
-    if (selected) {
-      onApplianceChange({
-        ...selected,
-        hoursPerDay: validHours,
-      });
+  const handleHoursChange = (appliance: ApplianceUsage, hours: number) => {
+    const updatedAppliance = {
+      ...appliance,
+      hoursPerDay: hours,
+      timeSlots: hours > 0 ? getDefaultTimeSlots(hours) : []
+    };
+    onApplianceChange(updatedAppliance);
+  };
+
+  // Handle time slots change
+  const handleTimeSlotsChange = (appliance: ApplianceUsage, timeSlots: TimeSlot[]) => {
+    onApplianceChange({
+      ...appliance,
+      timeSlots
+    });
+  };
+
+  // Handle critical change
+  const handleCriticalChange = (appliance: ApplianceUsage, isCritical: boolean) => {
+    onApplianceChange({
+      ...appliance,
+      isCritical
+    });
+  };
+
+  // Handle appliance selection
+  const handleApplianceSelect = (appliance: Appliance) => {
+    const existingAppliance = getSelectedAppliance(appliance.id);
+    if (existingAppliance) {
+      // If already selected, increment quantity
+      handleQuantityChange(existingAppliance, existingAppliance.quantity + 1);
+    } else {
+      // If not selected, create new with default values
+      const newAppliance: ApplianceUsage = {
+        ...appliance,
+        power: appliance.wattage,
+        quantity: appliance.defaultQuantity,
+        hoursPerDay: appliance.defaultHours,
+        timeSlots: getDefaultTimeSlots(appliance.defaultHours),
+        isCritical: false
+      };
+      onApplianceChange(newAppliance);
     }
   };
 
@@ -79,14 +115,19 @@ const ApplianceSelector: React.FC<ApplianceSelectorProps> = ({
   const handleCustomApplianceSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    const newAppliance: SelectedAppliance = {
+    const hoursPerDay = parseInt(customAppliance.hoursPerDay);
+    const wattage = parseInt(customAppliance.wattage);
+    const newAppliance: ApplianceUsage = {
       id: `custom-${Date.now()}`,
       name: customAppliance.name,
-      wattage: parseInt(customAppliance.wattage),
+      power: wattage,
+      wattage: wattage,
       defaultQuantity: parseInt(customAppliance.quantity),
-      defaultHours: parseInt(customAppliance.hoursPerDay),
+      defaultHours: hoursPerDay,
       quantity: parseInt(customAppliance.quantity),
-      hoursPerDay: parseInt(customAppliance.hoursPerDay)
+      hoursPerDay: hoursPerDay,
+      timeSlots: getDefaultTimeSlots(hoursPerDay),
+      isCritical: false
     };
 
     onApplianceChange(newAppliance);
@@ -100,206 +141,108 @@ const ApplianceSelector: React.FC<ApplianceSelectorProps> = ({
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6">
-      <h2 className="text-xl font-semibold mb-4 text-gray-800">
-        Select Your Appliances
-      </h2>
-
-      {/* Desktop Table View */}
-      <div className="hidden md:block">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th scope="col" className="py-3 px-4 text-left text-sm font-medium text-gray-600">Appliance</th>
-                <th scope="col" className="py-3 px-4 text-left text-sm font-medium text-gray-600">Wattage</th>
-                <th scope="col" className="py-3 px-4 text-left text-sm font-medium text-gray-600">Quantity</th>
-                <th scope="col" className="py-3 px-4 text-left text-sm font-medium text-gray-600">Hours/Day</th>
-                <th scope="col" className="py-3 px-4 text-right text-sm font-medium text-gray-600">Daily Energy</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 bg-white">
-              {allAppliancesToDisplay.map((appliance) => {
-                const selected = getSelectedAppliance(appliance.id);
-                const quantity = selected ? selected.quantity : 0;
-                // Use defaultHours from the original appliance if available, otherwise use hoursPerDay from selected
-                const hours = selected ? selected.hoursPerDay : (appliance as any).defaultHours;
-                const isActive = quantity > 0;
-                const dailyEnergy = appliance.wattage * quantity * hours;
-
-                return (
-                  <tr 
-                    key={appliance.id}
-                    className={`hover:bg-gray-50 transition-colors ${
-                      isActive ? 'bg-green-50' : ''
-                    }`}
-                  >
-                    <td className="py-4 px-4">
-                      <div className="flex items-center">
-                        <span className={`${isActive ? 'font-medium text-gray-900' : 'text-gray-600'}`}>
-                          {appliance.name}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="py-4 px-4">
-                      <span className="text-gray-700">{appliance.wattage}W</span>
-                    </td>
-                    <td className="py-4 px-4">
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={() => handleQuantityChange(appliance, quantity - 1)}
-                          className="text-gray-500 hover:text-red-500 focus:outline-none transition-colors"
-                          disabled={quantity === 0}
-                        >
-                          <MinusCircleIcon className="h-5 w-5" />
-                        </button>
-                        <span className="w-6 text-center font-medium">{quantity}</span>
-                        <button
-                          onClick={() => handleQuantityChange(appliance, quantity + 1)}
-                          className="text-gray-500 hover:text-green-500 focus:outline-none transition-colors"
-                        >
-                          <PlusCircleIcon className="h-5 w-5" />
-                        </button>
-                      </div>
-                    </td>
-                    <td className="py-4 px-4">
-                      {isActive ? (
-                        <div className="flex items-center space-x-2">
-                          <button
-                            onClick={() => handleHoursChange(appliance.id, Math.max(1, hours - 1))}
-                            className="text-gray-500 hover:text-red-500 focus:outline-none transition-colors"
-                          >
-                            <MinusCircleIcon className="h-5 w-5" />
-                          </button>
-                          <input
-                            type="number"
-                            min="1"
-                            max="24"
-                            value={hours}
-                            onChange={(e) =>
-                              handleHoursChange(appliance.id, parseInt(e.target.value) || 1)
-                            }
-                            className="w-20 p-1 border rounded text-center focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                          />
-                          <button
-                            onClick={() => handleHoursChange(appliance.id, Math.min(24, hours + 1))}
-                            className="text-gray-500 hover:text-green-500 focus:outline-none transition-colors"
-                          >
-                            <PlusCircleIcon className="h-5 w-5" />
-                          </button>
-                        </div>
-                      ) : (
-                        // For non-selected appliances, show default hours
-                        <span className="text-gray-400">{appliance.defaultHours}</span>
-                      )}
-                    </td>
-                    <td className="py-4 px-4 text-right">
-                      {isActive ? (
-                        <span className="font-medium">
-                          {dailyEnergy.toLocaleString()} Wh
-                        </span>
-                      ) : (
-                        <span className="text-gray-400">-</span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+    <div className="space-y-6">
+      {/* Appliance Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {allAppliancesToDisplay.map((appliance) => (
+          <div
+            key={appliance.id}
+            className={`p-4 rounded-lg border cursor-pointer transition-colors ${
+              isSelected(appliance.id)
+                ? 'border-blue-500 bg-blue-50'
+                : 'border-gray-200 hover:border-blue-300'
+            }`}
+            onClick={() => handleApplianceSelect(appliance)}
+          >
+            <h3 className="text-lg font-medium text-gray-900">
+              {appliance.name}
+            </h3>
+            <p className="text-sm text-gray-500">
+              {appliance.power || appliance.wattage}W per unit
+            </p>
+          </div>
+        ))}
       </div>
 
-      {/* Mobile Card View */}
-      <div className="md:hidden space-y-4">
-        {allAppliancesToDisplay.map((appliance) => {
-          const selected = getSelectedAppliance(appliance.id);
-          const quantity = selected ? selected.quantity : 0;
-          // Use defaultHours from the original appliance if available, otherwise use hoursPerDay from selected
-          const hours = selected ? selected.hoursPerDay : (appliance as any).defaultHours;
-          const isActive = quantity > 0;
-          const dailyEnergy = appliance.wattage * quantity * hours;
+      {/* Selected Appliances */}
+      {selectedAppliances.filter(a => a.quantity > 0).map((appliance) => (
+        <div key={appliance.id} className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-lg font-medium text-gray-900">
+                {appliance.name}
+              </h3>
+              <p className="text-sm text-gray-500">
+                {appliance.power || appliance.wattage}W per unit
+              </p>
+            </div>
+            <div className="flex items-center">
+              <label className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  checked={appliance.isCritical}
+                  onChange={(e) => handleCriticalChange(appliance, e.target.checked)}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-700">Critical Load</span>
+              </label>
+            </div>
+          </div>
 
-          return (
-            <div
-              key={appliance.id}
-              className={`p-4 rounded-lg border ${
-                isActive ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'
-              }`}
-            >
-              <div className="flex justify-between items-start mb-3">
-                <div>
-                  <h3 className={`font-medium ${isActive ? 'text-gray-900' : 'text-gray-600'}`}>
-                    {appliance.name}
-                  </h3>
-                  <p className="text-sm text-gray-500">{appliance.wattage}W</p>
-                </div>
-                {isActive && (
-                  <span className="text-sm font-medium text-green-600">
-                    {dailyEnergy.toLocaleString()} Wh/day
-                  </span>
-                )}
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Quantity
-                  </label>
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() => handleQuantityChange(appliance, quantity - 1)}
-                      className="text-gray-500 hover:text-red-500 focus:outline-none transition-colors"
-                      disabled={quantity === 0}
-                    >
-                      <MinusCircleIcon className="h-5 w-5" />
-                    </button>
-                    <span className="w-6 text-center font-medium">{quantity}</span>
-                    <button
-                      onClick={() => handleQuantityChange(appliance, quantity + 1)}
-                      className="text-gray-500 hover:text-green-500 focus:outline-none transition-colors"
-                    >
-                      <PlusCircleIcon className="h-5 w-5" />
-                    </button>
-                  </div>
-                </div>
-
-                {isActive && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Hours/Day
-                    </label>
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => handleHoursChange(appliance.id, Math.max(1, hours - 1))}
-                        className="text-gray-500 hover:text-red-500 focus:outline-none transition-colors"
-                      >
-                        <MinusCircleIcon className="h-5 w-5" />
-                      </button>
-                      <input
-                        type="number"
-                        min="1"
-                        max="24"
-                        value={hours}
-                        onChange={(e) =>
-                          handleHoursChange(appliance.id, parseInt(e.target.value) || 1)
-                        }
-                        className="w-20 p-1 border rounded text-center focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                      />
-                      <button
-                        onClick={() => handleHoursChange(appliance.id, Math.min(24, hours + 1))}
-                        className="text-gray-500 hover:text-green-500 focus:outline-none transition-colors"
-                      >
-                        <PlusCircleIcon className="h-5 w-5" />
-                      </button>
-                    </div>
-                  </div>
-                )}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Quantity
+              </label>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => handleQuantityChange(appliance, Math.max(0, appliance.quantity - 1))}
+                  className="p-1 text-gray-500 hover:text-gray-700"
+                >
+                  <MinusCircleIcon className="h-5 w-5" />
+                </button>
+                <input
+                  type="number"
+                  min="0"
+                  value={appliance.quantity}
+                  onChange={(e) => handleQuantityChange(appliance, parseInt(e.target.value))}
+                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                />
+                <button
+                  onClick={() => handleQuantityChange(appliance, appliance.quantity + 1)}
+                  className="p-1 text-gray-500 hover:text-gray-700"
+                >
+                  <PlusCircleIcon className="h-5 w-5" />
+                </button>
               </div>
             </div>
-          );
-        })}
-      </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Hours per Day
+              </label>
+              <input
+                type="number"
+                min="0"
+                max="24"
+                value={appliance.hoursPerDay}
+                onChange={(e) => handleHoursChange(appliance, parseInt(e.target.value))}
+                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+
+          <div className="mt-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Usage Time Slots
+            </label>
+            <TimeSlotInput
+              value={appliance.timeSlots}
+              onChange={(slots) => handleTimeSlotsChange(appliance, slots)}
+            />
+          </div>
+        </div>
+      ))}
 
       {/* Custom Appliance Form */}
       <div className="mt-6 border-t pt-6">
@@ -403,6 +346,4 @@ const ApplianceSelector: React.FC<ApplianceSelectorProps> = ({
       )}
     </div>
   );
-};
-
-export default ApplianceSelector;
+}

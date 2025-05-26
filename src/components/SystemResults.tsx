@@ -1,273 +1,306 @@
 import React, { useState } from 'react';
-import { ArrowLeftIcon, BatteryFullIcon, ZapIcon, SunIcon, Share2Icon } from 'lucide-react';
 import { SystemResults as SystemResultsType } from '../types';
-import { formatCurrency } from '../utils/calculations';
-import PremiumDownloadButton from './PremiumDownloadButton';
+import { InfoIcon } from './Icons';
+import SystemCharts from './SystemCharts';
+import { generatePDFReport } from '../utils/reportGenerator';
+import { initializePayment } from '../utils/payment';
 
 interface SystemResultsProps {
   results: SystemResultsType;
   onBack: () => void;
-  backupHours: number;
-  selectedState?: { name: string; psh: number };
-  onRecalculateWithInverter: (inverterSize: number) => void;
+  onRestart: () => void;
 }
 
 const SystemResults: React.FC<SystemResultsProps> = ({ 
   results, 
   onBack,
-  backupHours,
-  selectedState,
-  onRecalculateWithInverter
+  onRestart,
 }) => {
-  const [selectedBatteryType, setSelectedBatteryType] = useState<'Tubular' | 'Lithium'>('Lithium');
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [customerEmail, setCustomerEmail] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const getSystemSummary = () => {
+    const systemType = 'Off-grid';
+    const batteryType = results.batteries.type;
+    const batteryCount = results.batteries.count;
+    const panelCount = results.solarPanels.count;
+    const totalCapacity = results.solarPanels.totalCapacity;
+
+    return {
+      type: systemType,
+      description: `${systemType} system with ${panelCount} solar panels (${totalCapacity}kWp total) and ${batteryCount} ${batteryType} batteries`,
+      backup: `${results.backupHours} hours of backup power`,
+      dailyProduction: `${results.solarPanels.dailyProduction.toFixed(1)}kWh daily production`,
+      peakLoad: `${(results.peakLoad / 1000).toFixed(1)}kW peak load`
+    };
+  };
+
+  const summary = getSystemSummary();
   
-  const handleBatteryTypeChange = (type: 'Tubular' | 'Lithium') => {
-    setSelectedBatteryType(type);
+  const handlePayment = async () => {
+    if (!customerEmail) {
+      setError('Please enter your email address');
+      return;
+    }
+
+    setError(null);
+    try {
+      await initializePayment(
+        customerEmail,
+        async (reference) => {
+          // Payment successful, generate report
+          setIsGeneratingReport(true);
+          try {
+            const report = await generatePDFReport(results, {
+              customerName: 'Customer',
+              customerEmail,
+              customerPhone: '',
+              installationAddress: '',
+              state: results.state || 'Lagos' // Provide default state if not available
+            });
+            
+            // Create a download link with reference in filename
+            const url = window.URL.createObjectURL(report);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `solar-system-design-report-${reference}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+            
+            setShowPaymentModal(false);
+            setCustomerEmail('');
+          } catch (error) {
+            console.error('Error generating report:', error);
+            setError('Failed to generate report. Please try again or contact support.');
+          } finally {
+            setIsGeneratingReport(false);
+          }
+        },
+        () => {
+          // Payment cancelled
+          setShowPaymentModal(false);
+          setCustomerEmail('');
+        }
+      );
+    } catch (error) {
+      console.error('Payment error:', error);
+      setError('Payment failed. Please try again or contact support.');
+    }
   };
 
   return (
-    <div className="space-y-6">
-      <button 
-        onClick={onBack}
-        className="flex items-center text-green-600 hover:text-green-700 transition-colors"
-      >
-        <ArrowLeftIcon className="h-4 w-4 mr-1" />
-        Back to calculator
-      </button>
-      
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-          <p className="text-sm text-blue-800">
-            <span className="font-semibold">Note:</span> Our system sizing calculator currently supports systems up to 10kVA. We are working to expand our capacity for larger systems. For systems above 10kVA, please contact us directly for a custom quote.
-          </p>
-        </div>
-        {/* System Size Limit Note */}
-        {results.systemSizeLimitNote && (
-          <div className="mb-6 p-4 bg-orange-100 rounded-lg border border-orange-400 text-orange-800">
-            <p className="text-sm font-semibold">{results.systemSizeLimitNote}</p>
-          </div>
-        )}
-        <h2 className="text-2xl font-bold text-gray-800 mb-4">System Sizing Results</h2>
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
-          <div className="bg-gradient-to-r from-green-600 to-green-700 p-6 text-white">
-            <h2 className="text-2xl font-bold mb-2">Your Solar-Powered System Recommendation</h2>
-            <p className="opacity-90">
-              Here's your complete solar-powered system design based on your requirements.
-            </p>
-          </div>
-          
-          <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Inverter Section */}
-              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                <div className="flex items-center mb-3">
-                  <ZapIcon className="h-5 w-5 text-yellow-500 mr-2" />
-                  <h3 className="text-lg font-semibold text-gray-800">Inverter</h3>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Inverter Size:</span>
-                    <span className="font-medium">{results.inverterSize} KVA</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">System Voltage:</span>
-                    <span className="font-medium">{results.systemVoltage}V</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Peak Load:</span>
-                    <span className="font-medium">{results.peakLoad.toLocaleString()} W</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">With Safety Margin:</span>
-                    <span className="font-medium">{results.adjustedPeakLoad.toLocaleString()} W</span>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Solar Panel Section */}
-              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                <div className="flex items-center mb-3">
-                  <SunIcon className="h-5 w-5 text-yellow-500 mr-2" />
-                  <h3 className="text-lg font-semibold text-gray-800">Solar Panels</h3>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Panel Type:</span>
-                    <span className="font-medium">Jinko 550W</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Number of Panels:</span>
-                    <span className="font-medium">{results.solarPanels.count}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Total Capacity:</span>
-                    <span className="font-medium">{results.solarPanels.totalWattage.toLocaleString()} W</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Daily Output:</span>
-                    <span className="font-medium text-green-600">{results.solarPanels.dailyOutput.toFixed(2)} kWh/day</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            {/* Paralleling Note */}
-            {results.parallelingNote && (
-              <div className="mt-4 p-3 bg-blue-100 border border-blue-400 text-blue-700 rounded-md">
-                <p className="text-sm font-medium">{results.parallelingNote}</p>
-              </div>
-            )}
-            
-            {/* PV Input Warning */}
-            {results.pvInputWarning && (
-              <div className="mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-md">
-                <p className="text-sm font-medium">{results.pvInputWarning}</p>
-                {results.recommendedInverterSizeForPV && (
-                  <button
-                    onClick={() => onRecalculateWithInverter(results.recommendedInverterSizeForPV!)}
-                    className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm font-medium"
-                  >
-                    Recalculate with {results.recommendedInverterSizeForPV} kVA Inverter
-                  </button>
-                )}
-              </div>
-            )}
-            
-            {/* Battery Section */}
-            <div className="mt-6">
-              <div className="flex items-center mb-3">
-                <BatteryFullIcon className="h-5 w-5 text-yellow-500 mr-2" />
-                <h3 className="text-lg font-semibold text-gray-800">Battery Options</h3>
-              </div>
-              
-              <div className="flex space-x-4 mb-4">
-                <button
-                  onClick={() => handleBatteryTypeChange('Tubular')}
-                  className={`px-4 py-2 rounded-md ${
-                    selectedBatteryType === 'Tubular'
-                      ? 'bg-green-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  } transition-colors`}
-                >
-                  Tubular Battery
-                </button>
-                <button
-                  onClick={() => handleBatteryTypeChange('Lithium')}
-                  className={`px-4 py-2 rounded-md ${
-                    selectedBatteryType === 'Lithium'
-                      ? 'bg-green-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  } transition-colors`}
-                >
-                  Lithium Battery
-                </button>
-              </div>
-              
-              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                {selectedBatteryType === 'Tubular' ? (
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Battery Type:</span>
-                      <span className="font-medium">{results.batteryOptions.tubular.modelName}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Number of Batteries:</span>
-                      <span className="font-medium">{results.batteryOptions.tubular.count}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Total Capacity:</span>
-                      <span className="font-medium">
-                        {(results.batteryOptions.tubular.totalCapacity / 1000).toFixed(1)} kWh
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Depth of Discharge:</span>
-                      <span className="font-medium">50%</span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Battery Type:</span>
-                      <span className="font-medium">{results.batteryOptions.lithium.modelName}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Number of Batteries:</span>
-                      <span className="font-medium">{results.batteryOptions.lithium.count}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Total Capacity:</span>
-                      <span className="font-medium">
-                        {(results.batteryOptions.lithium.totalCapacity / 1000).toFixed(1)} kWh
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Depth of Discharge:</span>
-                      <span className="font-medium">90%</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-            
-            {/* Total Price Section */}
-            <div className="mt-6 bg-green-50 p-4 rounded-lg border border-green-200">
-              <h3 className="text-lg font-semibold text-gray-800 mb-3">Estimated System Price Range</h3>
-              
-              <div className="text-2xl font-bold text-green-700 mb-2">
-                {selectedBatteryType === 'Tubular'
-                  ? `${formatCurrency(results.totalPrice.withTubular.range.lowerBound)} - ${formatCurrency(results.totalPrice.withTubular.range.upperBound)}`
-                  : `${formatCurrency(results.totalPrice.withLithium.range.lowerBound)} - ${formatCurrency(results.totalPrice.withLithium.range.upperBound)}`}
-              </div>
-              
-              <div className="mt-4 space-y-2">
-                <p className="text-sm text-gray-600 font-medium">Price Disclaimer:</p>
-                <ul className="text-sm text-gray-600 list-disc list-inside space-y-1">
-                  {results.priceDisclaimer.factors.map((factor, index) => (
-                    <li key={index}>{factor}</li>
-                  ))}
-                </ul>
-                <p className="text-sm text-gray-600 italic mt-2">
-                  *Prices shown are supplier prices for core components only. Additional costs include:
-                </p>
-                <ul className="text-sm text-gray-600 list-disc list-inside space-y-1">
-                  <li>Installation and labor charges</li>
-                  <li>Additional components (cables, breakers, etc.)</li>
-                  <li>Transportation and logistics</li>
-                  <li>Local permits and regulations</li>
-                </ul>
-              </div>
-            </div>
-            
-            {/* Action Buttons */}
-            <div className="mt-6 flex flex-col sm:flex-row justify-center gap-4">
-              <div className="w-full">
-                <PremiumDownloadButton 
-                  results={results}
-                  backupHours={backupHours}
-                  selectedState={selectedState}
-                />
-              </div>
-              
-              <a
-                href="https://wa.me/2349066730744?text=Hello,%20I%20just%20sized%20a%20solar%20system%20on%20SolarMate%20Pro.%20I'd%20like%20to%20discuss%20further."
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors"
-              >
-                <Share2Icon className="h-5 w-5 mr-2" />
-                Contact Us on WhatsApp
-              </a>
-            </div>
-          </div>
+    <div className="max-w-4xl mx-auto p-6">
+      <h2 className="text-2xl font-bold mb-6">System Analysis Results</h2>
+
+      {/* System Summary Card */}
+      <div className="bg-blue-50 p-6 rounded-xl mb-8">
+        <h3 className="text-xl font-semibold mb-4">System Overview</h3>
+        <div className="space-y-2">
+          <p className="text-lg">{summary.description}</p>
+          <p>• {summary.backup}</p>
+          <p>• {summary.dailyProduction}</p>
+          <p>• {summary.peakLoad}</p>
+          <p>• System Voltage: {results.batteries.voltage}V</p>
+          <p>• System Phase: Single Phase</p>
+          <p className="text-red-600 font-medium">• Maximum System Capacity: 20kVA</p>
         </div>
       </div>
 
-      {/* Development Note */}
-      <div className="mt-6 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-        <p className="text-sm text-yellow-800">
-          <span className="font-semibold">Development Note:</span> We are continuously working to enhance our solar system design tool. Future updates will include more advanced calculations, such as incorporating additional charge controllers for larger solar arrays, detailed wiring diagrams, and more nuanced financial analysis.
-        </p>
+      {/* System Limitations Notice */}
+      <div className="bg-red-50 border border-red-200 p-4 rounded-xl mb-8">
+        <h3 className="text-lg font-semibold text-red-700 mb-2">System Limitations</h3>
+        <div className="space-y-2 text-red-600">
+          <p>• Maximum system capacity is limited to 20kVA</p>
+          <p>• All systems are designed for single-phase operation</p>
+          <p>• For larger systems, please contact for custom solutions</p>
+        </div>
+      </div>
+
+      {/* System Charts */}
+      <SystemCharts
+        peakLoad={results.peakLoad}
+        dailyConsumption={results.dailyConsumption}
+        solarPanels={results.solarPanels}
+        batteries={results.batteries}
+        backupHours={results.backupHours}
+      />
+
+      {/* Component Details */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        {/* Solar Panels */}
+        <div className="bg-white p-6 rounded-xl shadow-sm">
+          <div className="flex items-center gap-2 mb-4">
+            <h3 className="text-lg font-semibold">Solar Panels</h3>
+            <div className="group relative">
+              <InfoIcon className="h-4 w-4 text-gray-400 cursor-help" />
+              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 p-2 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                Solar panels convert sunlight into electricity. The number of panels is calculated based on your daily energy needs and local solar conditions.
+              </div>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <p>• {results.solarPanels.count}x {results.solarPanels.capacity}W panels</p>
+            <p>• {results.solarPanels.totalCapacity}kWp total capacity</p>
+            <p>• {results.solarPanels.dailyProduction.toFixed(1)}kWh daily production</p>
+          </div>
+          </div>
+          
+        {/* Inverter */}
+        <div className="bg-white p-6 rounded-xl shadow-sm">
+          <div className="flex items-center gap-2 mb-4">
+            <h3 className="text-lg font-semibold">Inverter</h3>
+            <div className="group relative">
+              <InfoIcon className="h-4 w-4 text-gray-400 cursor-help" />
+              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 p-2 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                The inverter converts DC power from solar panels to AC power for your home. It also manages battery charging and grid interaction.
+              </div>
+            </div>
+                </div>
+                <div className="space-y-2">
+            <p>• {results.inverter.size}kVA {results.inverter.type}</p>
+            <p>• {results.inverter.voltage}V system</p>
+                  </div>
+                </div>
+
+        {/* Batteries */}
+        <div className="bg-white p-6 rounded-xl shadow-sm">
+          <div className="flex items-center gap-2 mb-4">
+            <h3 className="text-lg font-semibold">Batteries</h3>
+            <div className="group relative">
+              <InfoIcon className="h-4 w-4 text-gray-400 cursor-help" />
+              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 p-2 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                Batteries store excess solar energy for use when the sun isn't shining. The number of batteries is calculated based on your backup requirements and system voltage.
+              </div>
+            </div>
+                </div>
+                <div className="space-y-2">
+            <p>• {results.batteries.count}x {results.batteries.type} batteries</p>
+            <p>• {results.batteries.capacity}kWh per battery ({results.batteries.count * results.batteries.capacity}kWh total)</p>
+            <p>• {results.batteries.voltage}V system</p>
+            <p>• {results.batteries.type === 'Lithium' ? '90%' : '50%'} depth of discharge</p>
+                  </div>
+                  </div>
+
+        {/* Charge Controller */}
+        {results.chargeController && (
+          <div className="bg-white p-6 rounded-xl shadow-sm">
+            <div className="flex items-center gap-2 mb-4">
+              <h3 className="text-lg font-semibold">Charge Controller</h3>
+              <div className="group relative">
+                <InfoIcon className="h-4 w-4 text-gray-400 cursor-help" />
+                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 p-2 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                  The charge controller regulates the power flow from solar panels to batteries, preventing overcharging and optimizing charging efficiency.
+                </div>
+              </div>
+            </div>
+                  <div className="space-y-2">
+              <p>• {results.chargeController.type} type</p>
+              <p>• {results.chargeController.current}A current rating</p>
+              <p>• {results.chargeController.voltage}V system</p>
+                    </div>
+                  </div>
+                )}
+            </div>
+            
+      {/* System Protection
+      <div className="bg-white p-6 rounded-xl shadow-sm mb-8">
+        <h3 className="text-lg font-semibold mb-4">System Protection & Safety</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <h4 className="font-medium mb-2">AC Circuit Protection</h4>
+            <div className="space-y-2">
+              <p>• Main Breaker: {Math.ceil((results.peakLoad / 230) * 1.25)}A (for {Math.ceil(results.peakLoad / 1000)}kW system)</p>
+              <p>• Inverter-Load Breaker: {Math.ceil((results.peakLoad / 230) * 1.25)}A</p>
+              <p>• Mains-Inverter Breaker: {Math.ceil((results.peakLoad / 230) * 1.25)}A</p>
+              </div>
+              </div>
+          <div>
+            <h4 className="font-medium mb-2">DC Circuit Protection</h4>
+            <div className="space-y-2">
+              <p>• Solar String Breaker: {Math.ceil((results.solarPanels.capacity / 37) * 1.25)}A per string</p>
+              <p>• Battery Bank Breaker: {Math.ceil((results.batteries.count * results.batteries.capacity * 1000 / results.batteries.voltage) * 1.25)}A</p>
+              <p>• Number of Strings: {Math.ceil(results.solarPanels.count / Math.floor(results.batteries.voltage / 37))}</p>
+              <p>• Panels per String: {Math.ceil(results.solarPanels.count / Math.ceil(results.solarPanels.count / Math.floor(results.batteries.voltage / 37)))}</p>
+            </div>
+              </div>
+          <div>
+            <h4 className="font-medium mb-2">Cable Specifications</h4>
+            <div className="space-y-2">
+              <p>• Solar Array: {Math.ceil((results.solarPanels.capacity / 37) * 1.25 / 4)}mm² per string</p>
+              <p>• Battery Bank: {Math.ceil((results.batteries.count * results.batteries.capacity * 1000 / results.batteries.voltage) * 1.25 / 4)}mm²</p>
+              <p>• Load Distribution: {Math.ceil((results.peakLoad / 230) * 1.25 / 4)}mm²</p>
+            </div>
+          </div>
+        </div>
+      </div> */}
+
+      {/* Payment Modal */}
+      {showPaymentModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+          <div className="bg-white p-6 rounded-lg max-w-md w-full">
+            <h3 className="text-xl font-semibold mb-4">Download Detailed Report</h3>
+            <p className="text-gray-600 mb-4">
+              Please enter your email address to proceed with the payment of ₦3,000
+            </p>
+            <input
+              type="email"
+              value={customerEmail}
+              onChange={(e) => setCustomerEmail(e.target.value)}
+              placeholder="Enter your email"
+              className="w-full p-2 border rounded mb-4"
+            />
+            {error && (
+              <p className="text-red-500 text-sm mb-4">{error}</p>
+            )}
+            <div className="flex justify-end gap-4">
+              <button
+                onClick={() => {
+                  setShowPaymentModal(false);
+                  setCustomerEmail('');
+                  setError(null);
+                }}
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handlePayment}
+                disabled={isGeneratingReport}
+                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+              >
+                {isGeneratingReport ? 'Processing...' : 'Pay ₦3,000'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Action Buttons */}
+      <div className="flex justify-between">
+        <button
+          onClick={onBack}
+          className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+        >
+          Back
+        </button>
+        <div className="space-x-4">
+          <button
+            onClick={onRestart}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Start New Calculation
+          </button>
+          <button
+            onClick={() => setShowPaymentModal(true)}
+            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+          >
+            Download Detailed Report (₦3,000)
+          </button>
+        </div>
       </div>
     </div>
   );
